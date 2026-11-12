@@ -77,7 +77,9 @@ errors: {'wb': 'Заблокировано (403)', 'ozon': 'Заблокиров
       «планшет» — бренды Apple/Samsung/Xiaomi) подтягиваются с сайтов.
 - [x] Выбранные фильтры передаются в `/api/search` и применяются (`_apply_filters` — уменьшают выдачу).
 - [x] Сбор до 5000 (`max_items`), пагинация в UI по 20/50/100 без отрисовки всего списка разом.
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43258694680](https://github.com/evangreen165/price-aggregator/actions/runs/43258694680),
+      `conclusion: success` (backend: ruff + 49 тестов, frontend: typecheck + build).
 
 ## Замечания
 
