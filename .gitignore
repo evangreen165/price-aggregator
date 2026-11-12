@@ -1,0 +1,17 @@
+node_modules/
+frontend/dist/
+dist/
+build/
+*.spec
+*.egg-info/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.idea/
+.vscode/
+*.log
+.gittoken
+.env
