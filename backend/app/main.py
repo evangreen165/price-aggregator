@@ -14,17 +14,21 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from app.core.config import APP_NAME, FRONTEND_DIST, HOST, IS_FROZEN, LOG_FILE, PORT
+from app.parsers import get_parser
 from app.plugins import get_manager
 
 logger = logging.getLogger(__name__)
 
 
 def _configure_logging() -> None:
-    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    # In --windowed builds sys.stdout/stderr are None, so only log to the file.
     if IS_FROZEN:
-        handlers.append(logging.FileHandler(LOG_FILE, encoding="utf-8"))
+        handlers: list[logging.Handler] = [logging.FileHandler(LOG_FILE, encoding="utf-8")]
+    else:
+        handlers = [logging.StreamHandler()]
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -57,6 +61,30 @@ def list_plugins() -> list[dict]:
 def reload_plugins() -> dict:
     manager = get_manager().reload()
     return {"status": "ok", "plugins": manager.list_plugins()}
+
+
+class SearchRequest(BaseModel):
+    query: str
+    marketplaces: list[str] = []
+    region: str = "belarus"
+
+
+@app.post("/api/search")
+async def search(req: SearchRequest) -> dict:
+    results: dict[str, list[dict]] = {}
+    errors: dict[str, str] = {}
+    for marketplace_id in req.marketplaces:
+        parser = get_parser(marketplace_id)
+        if parser is None:
+            continue
+        results[marketplace_id] = []
+        try:
+            products = await parser.search(req.query, req.region)
+            results[marketplace_id] = [product.to_dict() for product in products]
+        except Exception as exc:  # noqa: BLE001 - a failing marketplace must not break others
+            logger.exception("Search failed for marketplace %s", marketplace_id)
+            errors[marketplace_id] = str(exc)
+    return {"results": results, "errors": errors}
 
 
 if FRONTEND_DIST.is_dir():
@@ -109,7 +137,7 @@ def run_desktop() -> None:
         logger.error("Port %s:%s is already in use; close the other instance.", HOST, PORT)
         return
 
-    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="info")
+    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="info", log_config=None)
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, name="uvicorn", daemon=True)
     thread.start()

@@ -15,6 +15,28 @@ export type PluginsReloadResponse = {
   plugins: PluginInfo[];
 };
 
+export type Product = {
+  title: string;
+  price: number | null;
+  old_price: number | null;
+  currency: string;
+  url: string;
+  marketplace: string;
+  region: string;
+  parsed_at: string;
+};
+
+export type SearchRequest = {
+  query: string;
+  marketplaces: string[];
+  region: string;
+};
+
+export type SearchResponse = {
+  results: Record<string, Product[]>;
+  errors: Record<string, string>;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function apiGet<T>(path: string): Promise<T> {
@@ -27,10 +49,11 @@ async function apiGet<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function apiPost<T>(path: string): Promise<T> {
+async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status} ${response.statusText}`);
@@ -48,4 +71,8 @@ export function getPlugins(): Promise<PluginInfo[]> {
 
 export function reloadPlugins(): Promise<PluginsReloadResponse> {
   return apiPost<PluginsReloadResponse>("/api/plugins/reload");
+}
+
+export function searchProducts(request: SearchRequest): Promise<SearchResponse> {
+  return apiPost<SearchResponse>("/api/search", request);
 }

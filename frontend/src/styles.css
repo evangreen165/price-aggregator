@@ -310,3 +310,74 @@ p {
   font-size: 12px;
   word-break: break-all;
 }
+
+.checkbox-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.checkbox input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.result-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.result-title {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.result-title:hover {
+  color: var(--accent-hover);
+}
+
+.result-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.result-price {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}

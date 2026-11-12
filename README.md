@@ -15,10 +15,11 @@ backend/
   app/
     main.py            FastAPI-приложение, API и запуск desktop-окна
     plugins.py         менеджер плагинов на pluggy
+    parsers/           база парсеров и реестр (base, kufar, onliner, stubs)
     core/config.py     конфигурация и пути (в т.ч. frozen-режим)
   plugins/
     example_parser.py  пример плагина (фейковые данные, без сети)
-  tests/               pytest: health и плагины
+  tests/               pytest: health, плагины, парсеры, search API
   pyproject.toml
 frontend/
   src/                 React + TypeScript + React Router + React Query
@@ -79,6 +80,19 @@ python scripts/build.py
 | GET   | `/api/health`         | `{"status": "ok"}`                        |
 | GET   | `/api/plugins`        | список загруженных парсеров               |
 | POST  | `/api/plugins/reload` | перезагрузить плагины и вернуть новый список |
+| POST  | `/api/search`         | поиск: `{"query","marketplaces","region"}` → `{"results":{"<marketplace>":[Product]}, "errors":{}}` |
+
+Тело запроса `/api/search`:
+
+```json
+{"query": "монитор", "marketplaces": ["kufar", "onliner"], "region": "belarus"}
+```
+
+## Парсеры
+
+Реализованы: **Kufar** (JSON из `__NEXT_DATA__` на странице выдачи) и **Onliner**
+(JSON-API каталога `sdapi/catalog.api/search/products`). Ozon и Wildberries — заглушки,
+реализация отложена из-за сложных защит. Реестр и база — в `backend/app/parsers/`.
 
 ## Как добавить плагин
 
