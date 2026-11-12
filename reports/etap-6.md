@@ -83,7 +83,9 @@ pywebview/WebView2 пишет рекурсивный shutdown-шум в лог �
 - [x] «планшет» → Бренд, Объем памяти, Диагональ экрана (статический классификатор) + Kufar
       отдаёт свои реальные фильтры при `marketplace=kufar`.
 - [x] Выбранные фильтры передаются в `/api/search` и уменьшают выдачу (`_apply_filters`).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43248072376](https://github.com/evangreen165/price-aggregator/actions/runs/43248072376),
+      `conclusion: success` (backend: ruff + 43 теста, frontend: typecheck + build).
 
 ## Замечания
 
