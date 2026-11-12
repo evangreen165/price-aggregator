@@ -16,6 +16,23 @@ const priceFormat = new Intl.NumberFormat("ru-RU", {
   maximumFractionDigits: 2,
 });
 
+function pageWindow(current: number, total: number): (number | "…")[] {
+  if (total <= 10) {
+    return Array.from({ length: total }, (_, index) => index + 1);
+  }
+  const pages = new Set<number>([1, total, current - 1, current, current + 1]);
+  const items: (number | "…")[] = [];
+  let previous = 0;
+  for (const page of [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)) {
+    if (page - previous > 1) {
+      items.push("…");
+    }
+    items.push(page);
+    previous = page;
+  }
+  return items;
+}
+
 function ProductCard({ product }: { product: Product }) {
   const linkOpenMode = useSearchStore((state) => state.linkOpenMode);
   const navigate = useNavigate();
@@ -81,14 +98,26 @@ export default function SearchPage() {
     products.map((product) => ({ ...product, marketplace })),
   );
 
+  const totalPages =
+    search.itemsPerPage > 0
+      ? Math.max(1, Math.ceil(allProducts.length / search.itemsPerPage))
+      : 1;
+  const currentPage = Math.min(search.currentPage, totalPages);
+  const sliceStart = search.itemsPerPage > 0 ? (currentPage - 1) * search.itemsPerPage : 0;
+  const visibleProducts =
+    search.itemsPerPage > 0
+      ? allProducts.slice(sliceStart, sliceStart + search.itemsPerPage)
+      : allProducts;
+  const sliceEnd = search.itemsPerPage > 0
+    ? Math.min(sliceStart + search.itemsPerPage, allProducts.length)
+    : allProducts.length;
+  const truncated = Object.values(search.meta).some((entry) => entry.truncated);
+
   return (
     <section className="page">
       <header className="page-header">
         <h2>Поиск</h2>
-        <p>
-          Поиск по выбранным маркетплейсам. Kufar и Onliner работают, Ozon и Wildberries — задел
-          на потом.
-        </p>
+        <p>Поиск по выбранным маркетплейсам: Kufar, Onliner, Ozon и Wildberries.</p>
       </header>
 
       <div className="card">
@@ -163,9 +192,24 @@ export default function SearchPage() {
           </div>
         )}
 
-        <p className="muted">
-          Регион: Беларусь. Передача выбранных фильтров в парсеры — следующий шаг.
-        </p>
+        <div className="per-page-row">
+          <label className="muted" htmlFor="per-page">
+            Показывать по:
+          </label>
+          <select
+            id="per-page"
+            className="select"
+            value={search.itemsPerPage}
+            onChange={(event) => search.setItemsPerPage(Number(event.target.value))}
+          >
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+            <option value={0}>Все</option>
+          </select>
+        </div>
+
+        <p className="muted">Регион: Беларусь. Выбранные фильтры применяются к результатам.</p>
       </div>
 
       <div className="card">
@@ -195,10 +239,61 @@ export default function SearchPage() {
         {status === "success" && allProducts.length > 0 && (
           <>
             <ul className="result-list">
-              {allProducts.map((product) => (
+              {visibleProducts.map((product) => (
                 <ProductCard key={`${product.marketplace}-${product.url}`} product={product} />
               ))}
             </ul>
+
+            {totalPages > 1 && (
+              <div className="pagination">
+                <button
+                  className="button"
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => search.setCurrentPage(currentPage - 1)}
+                >
+                  Назад
+                </button>
+                {pageWindow(currentPage, totalPages).map((page, index) =>
+                  typeof page === "number" ? (
+                    <button
+                      className={page === currentPage ? "button page-active" : "button"}
+                      type="button"
+                      key={page}
+                      onClick={() => search.setCurrentPage(page)}
+                    >
+                      {page}
+                    </button>
+                  ) : (
+                    <span className="muted" key={`ellipsis-${index}`}>
+                      …
+                    </span>
+                  ),
+                )}
+                <button
+                  className="button"
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => search.setCurrentPage(currentPage + 1)}
+                >
+                  Вперед
+                </button>
+              </div>
+            )}
+
+            <div className="results-footer">
+              <p className="muted">
+                Найдено {allProducts.length} товаров
+                {search.itemsPerPage > 0 &&
+                  `, показано ${sliceStart + 1}–${sliceEnd}`}
+              </p>
+              {truncated && (
+                <p className="muted">
+                  Показаны не все результаты (достигнут лимит парсинга).
+                </p>
+              )}
+            </div>
+
             {Object.keys(errors).length > 0 && (
               <p className="status error">
                 Частичные ошибки:{" "}

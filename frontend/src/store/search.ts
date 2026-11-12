@@ -12,12 +12,15 @@ type SearchStore = {
   status: SearchStatus;
   results: Record<string, Product[]>;
   errors: Record<string, string>;
+  meta: Record<string, { truncated: boolean }>;
   requestError: string | null;
   filters: FilterOption[];
   filtersCategory: string | null;
   filtersLoading: boolean;
   selectedFilters: Record<string, string[]>;
   linkOpenMode: LinkOpenMode;
+  currentPage: number;
+  itemsPerPage: number;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
   runSearch: () => Promise<void>;
@@ -26,6 +29,8 @@ type SearchStore = {
   toggleFilterOption: (key: string, option: string) => void;
   clearFilters: () => void;
   setLinkOpenMode: (mode: LinkOpenMode) => void;
+  setCurrentPage: (page: number) => void;
+  setItemsPerPage: (count: number) => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -34,12 +39,15 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   status: "idle",
   results: {},
   errors: {},
+  meta: {},
   requestError: null,
   filters: [],
   filtersCategory: null,
   filtersLoading: false,
   selectedFilters: {},
   linkOpenMode: "current_window",
+  currentPage: 1,
+  itemsPerPage: 50,
 
   setQuery: (query) => set({ query }),
 
@@ -64,7 +72,13 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         limit_pages: 10,
         filters,
       });
-      set({ status: "success", results: response.results, errors: response.errors });
+      set({
+        status: "success",
+        results: response.results,
+        errors: response.errors,
+        meta: response.meta,
+        currentPage: 1,
+      });
     } catch (error) {
       set({
         status: "error",
@@ -91,4 +105,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   clearFilters: () => set({ selectedFilters: {} }),
 
   setLinkOpenMode: (linkOpenMode) => set({ linkOpenMode }),
+
+  setCurrentPage: (currentPage) => set({ currentPage }),
+
+  setItemsPerPage: (itemsPerPage) => set({ itemsPerPage, currentPage: 1 }),
 }));

@@ -48,6 +48,7 @@ class BaseParser(ABC):
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
         self._injected_client = client
+        self._truncated = False
 
     @asynccontextmanager
     async def _client(self) -> AsyncIterator[httpx.AsyncClient]:

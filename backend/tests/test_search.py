@@ -52,6 +52,32 @@ def test_search_endpoint_uses_selected_parsers(monkeypatch) -> None:
     assert "T" in parsed_at
 
 
+def test_search_endpoint_reports_truncation(monkeypatch) -> None:
+    class TruncatingParser(BaseParser):
+        marketplace_id = "onliner"
+
+        async def search(
+            self,
+            query: str,
+            region: str,
+            limit_pages: int = 10,
+            filters: dict[str, list[str]] | None = None,
+        ) -> list[Product]:
+            self._truncated = True
+            return []
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return TruncatingParser() if marketplace_id == "onliner" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/search", json={"query": "x", "marketplaces": ["onliner"], "region": "belarus"}
+        )
+    body = response.json()
+    assert body["meta"]["onliner"] == {"truncated": True}
+
+
 def test_search_endpoint_records_parser_errors(monkeypatch) -> None:
     class FailingParser(BaseParser):
         marketplace_id = "onliner"

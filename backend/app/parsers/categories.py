@@ -74,6 +74,26 @@ CATEGORIES: dict[str, dict] = {
             {"key": "smart_tv", "label": "Smart TV", "options": ["Да", "Нет"]},
         ],
     },
+    "tablets": {
+        "keywords": ["планшет", "ipad", "tablet"],
+        "filters": [
+            {
+                "key": "brand",
+                "label": "Бренд",
+                "options": ["Apple", "Samsung", "Xiaomi", "Lenovo", "Huawei"],
+            },
+            {
+                "key": "storage",
+                "label": "Объем памяти",
+                "options": ["64 ГБ", "128 ГБ", "256 ГБ", "512 ГБ", "1 ТБ+"],
+            },
+            {
+                "key": "diagonal",
+                "label": "Диагональ экрана",
+                "options": ["до 8\"", "8–10\"", "10–13\"", "13\"+"],
+            },
+        ],
+    },
 }
 
 BRANDS: dict[str, dict] = {
@@ -129,6 +149,28 @@ BRANDS: dict[str, dict] = {
 
 DEFAULT_CATEGORY = "general"
 
+POPULAR_BRANDS = [
+    "Apple",
+    "Samsung",
+    "Xiaomi",
+    "LG",
+    "Asus",
+    "Lenovo",
+    "HP",
+    "Dell",
+    "Sony",
+    "Huawei",
+]
+
+GENERAL_FILTERS = [
+    {
+        "key": "price_range",
+        "label": "Цена от/до",
+        "options": ["до 500", "500–1000", "1000–5000", "5000–10000", "10000+"],
+    },
+    {"key": "brand", "label": "Бренд", "options": list(POPULAR_BRANDS)},
+]
+
 
 def find_brand(query: str) -> str | None:
     """Return the first known brand found in the query, or None."""
@@ -173,4 +215,6 @@ def filters_for_query(query: str) -> list[dict]:
                 "options": BRANDS[brand]["type_options"],
             },
         )
+    if not merged and classify(query) == [DEFAULT_CATEGORY]:
+        return [dict(entry, options=list(entry["options"])) for entry in GENERAL_FILTERS]
     return merged

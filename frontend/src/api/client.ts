@@ -37,6 +37,7 @@ export type SearchRequest = {
 export type SearchResponse = {
   results: Record<string, Product[]>;
   errors: Record<string, string>;
+  meta: Record<string, { truncated: boolean }>;
 };
 
 export type FilterOption = {

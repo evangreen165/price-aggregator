@@ -5,7 +5,8 @@ from __future__ import annotations
 from app.parsers.base import BaseParser, Product
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
-from app.parsers.stubs import OzonParser, WbParser
+from app.parsers.ozon import OzonParser
+from app.parsers.wb import WbParser
 
 PARSERS: dict[str, type[BaseParser]] = {
     KufarParser.marketplace_id: KufarParser,

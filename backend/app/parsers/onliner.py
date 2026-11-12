@@ -24,6 +24,7 @@ class OnlinerParser(BaseParser):
     ) -> list[Product]:
         products: list[Product] = []
         seen: set[str] = set()
+        self._truncated = False
 
         async with self._client() as client:
             for page in range(1, limit_pages + 1):
@@ -37,6 +38,8 @@ class OnlinerParser(BaseParser):
                 added = self._add_products(products, seen, items, region)
                 if not added:
                     break
+                if page == limit_pages:
+                    self._truncated = True
 
         return self._apply_filters(products, filters)
 

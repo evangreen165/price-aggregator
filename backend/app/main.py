@@ -127,20 +127,23 @@ class SearchRequest(BaseModel):
 async def search(req: SearchRequest) -> dict:
     results: dict[str, list[dict]] = {}
     errors: dict[str, str] = {}
+    meta: dict[str, dict] = {}
     for marketplace_id in req.marketplaces:
         parser = get_parser(marketplace_id)
         if parser is None:
             continue
         results[marketplace_id] = []
+        meta[marketplace_id] = {"truncated": False}
         try:
             products = await parser.search(
                 req.query, req.region, req.limit_pages, req.filters
             )
             results[marketplace_id] = [product.to_dict() for product in products]
+            meta[marketplace_id] = {"truncated": bool(getattr(parser, "_truncated", False))}
         except Exception as exc:  # noqa: BLE001 - a failing marketplace must not break others
             logger.exception("Search failed for marketplace %s", marketplace_id)
             errors[marketplace_id] = str(exc)
-    return {"results": results, "errors": errors}
+    return {"results": results, "errors": errors, "meta": meta}
 
 
 if FRONTEND_DIST.is_dir():

@@ -36,6 +36,7 @@ class KufarParser(BaseParser):
     ) -> list[Product]:
         products: list[Product] = []
         seen: set[str] = set()
+        self._truncated = False
 
         async with self._client() as client:
             response = await client.get(SEARCH_URL, params={"query": query})
@@ -65,8 +66,11 @@ class KufarParser(BaseParser):
                     ads = api_response.json().get("ads", [])
                 except ValueError:
                     break
-                if not self._add_products(products, seen, ads, region):
+                added = self._add_products(products, seen, ads, region)
+                if not added:
                     break
+                if page == limit_pages:
+                    self._truncated = True
 
         return self._apply_filters(products, filters)
 

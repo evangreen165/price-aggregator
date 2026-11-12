@@ -7,7 +7,8 @@ import httpx
 from app.parsers import PARSERS, get_parser, list_parsers
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
-from app.parsers.stubs import OzonParser, WbParser
+from app.parsers.ozon import OzonParser
+from app.parsers.wb import WbParser
 
 
 def _kufar_token(search_id: str, page: int) -> str:
@@ -177,9 +178,99 @@ def test_onliner_search_stops_on_empty_page() -> None:
     assert len(products) == 2
 
 
-def test_stub_parsers_return_empty() -> None:
-    assert asyncio.run(OzonParser().search("монитор", "belarus")) == []
-    assert asyncio.run(WbParser().search("монитор", "belarus")) == []
+def test_onliner_search_marks_truncated_at_limit() -> None:
+    third = {
+        "full_name": "LG UltraGear 27",
+        "html_url": "https://catalog.onliner.by/display/lg/27gn800",
+        "prices": {"price_min": {"amount": "990.0", "currency": "BYN"}},
+    }
+    handler = _onliner_handler({1: ONLINER_ITEMS, 2: [third]})
+    parser = OnlinerParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    asyncio.run(parser.search("монитор", "belarus", limit_pages=2))
+    assert parser._truncated is True
+
+
+WB_JSON = {
+    "data": {
+        "products": [
+            {"id": 1001, "name": "Телевизор Samsung 55", "salePriceU": 199990, "brand": "Samsung"},
+            {"id": 1002, "name": "Телевизор LG 43", "salePriceU": 149990, "brand": "LG"},
+        ]
+    }
+}
+
+
+def _wb_handler(items_by_page: dict[int, list[dict]]):
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params.get("page", "1"))
+        return httpx.Response(200, json={"data": {"products": items_by_page.get(page, [])}})
+
+    return handler
+
+
+def test_wb_search_parses_and_paginates() -> None:
+    extra = [{"id": 1003, "name": "Телевизор Xiaomi 50", "salePriceU": 129990, "brand": "Xiaomi"}]
+    handler = _wb_handler({1: WB_JSON["data"]["products"], 2: extra})
+    parser = WbParser(fetcher=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    products = asyncio.run(parser.search("телевизор", "belarus", limit_pages=2))
+    assert len(products) == 3
+    first = products[0]
+    assert first.title == "Телевизор Samsung 55"
+    assert first.price == 1999.9
+    assert first.marketplace == "wb"
+    assert first.url == "https://www.wildberries.ru/catalog/1001/detail.aspx"
+    assert parser._truncated is True
+
+
+def test_wb_search_stops_on_empty_page() -> None:
+    handler = _wb_handler({1: WB_JSON["data"]["products"], 2: []})
+    parser = WbParser(fetcher=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    products = asyncio.run(parser.search("телевизор", "belarus", limit_pages=3))
+    assert len(products) == 2
+
+
+OZON_JSON = {
+    "widgetStates": {
+        "searchPageResult": json.dumps(
+            {
+                "items": [
+                    {
+                        "title": "Телевизор Samsung QLED 55",
+                        "skuId": 5550001,
+                        "price": {"price": "2599.00", "cardPrice": "2499.00"},
+                    },
+                    {"title": "Телевизор LG 55", "skuId": 5550002, "price": "1999.00"},
+                ]
+            }
+        )
+    }
+}
+
+
+def _ozon_handler(_request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json=OZON_JSON)
+
+
+def _empty_ozon_handler(_request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"widgetStates": {}})
+
+
+def test_ozon_search_extracts_products() -> None:
+    parser = OzonParser(fetcher=httpx.AsyncClient(transport=httpx.MockTransport(_ozon_handler)))
+    products = asyncio.run(parser.search("телевизор", "belarus"))
+    assert len(products) == 2
+    assert products[0].title == "Телевизор Samsung QLED 55"
+    assert products[0].price == 2599.0
+    assert products[0].url == "https://www.ozon.ru/product/5550001"
+    assert products[0].marketplace == "ozon"
+
+
+def test_ozon_search_returns_empty_on_missing_data() -> None:
+    parser = OzonParser(
+        fetcher=httpx.AsyncClient(transport=httpx.MockTransport(_empty_ozon_handler))
+    )
+    products = asyncio.run(parser.search("телевизор", "belarus"))
+    assert products == []
 
 
 def test_registry_lists_and_resolves_all_parsers() -> None:

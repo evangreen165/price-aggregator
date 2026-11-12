@@ -62,8 +62,25 @@ def test_phone_filters_extended() -> None:
     assert {"brand", "os", "storage", "color"} <= keys
 
 
-def test_general_has_no_filters() -> None:
-    assert filters_for_query("что-то непонятное") == []
+def test_tablet_keyword_classifies() -> None:
+    assert classify("планшет") == ["tablets"]
+    assert "tablets" in classify("ipad air")
+
+
+def test_tablet_filters() -> None:
+    filters = filters_for_query("планшет")
+    keys = {entry["key"] for entry in filters}
+    assert {"brand", "storage", "diagonal"} <= keys
+    labels = {entry["label"] for entry in filters}
+    assert "Диагональ экрана" in labels
+
+
+def test_general_has_base_filters() -> None:
+    filters = filters_for_query("что-то непонятное")
+    keys = {entry["key"] for entry in filters}
+    assert {"price_range", "brand"} <= keys
+    price_filter = next(entry for entry in filters if entry["key"] == "price_range")
+    assert price_filter["label"] == "Цена от/до"
 
 
 def test_filters_endpoint_returns_categories_list() -> None:
@@ -78,7 +95,16 @@ def test_filters_endpoint_returns_categories_list() -> None:
     assert samsung["filters"][0]["label"] == "Тип устройства"
     assert empty["category"] == "general"
     assert empty["categories"] == ["general"]
-    assert empty["filters"] == []
+    assert any(entry["key"] == "price_range" for entry in empty["filters"])
+
+
+def test_tablet_filters_endpoint() -> None:
+    with TestClient(app) as client:
+        response = client.get("/api/filters", params={"query": "планшет"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["category"] == "tablets"
+    assert any(entry["label"] == "Диагональ экрана" for entry in body["filters"])
 
 
 def test_proxy_rejects_invalid_urls() -> None:
