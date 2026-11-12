@@ -82,7 +82,19 @@ onliner: 8 items  (напр. ASUS ROG Swift OLED PG34WCDN | 6642.68 BYN | belaru
 - [x] `.exe` собирается и запускается без консоли и без ошибок Uvicorn.
 - [x] Поиск «монитор» через Kufar и Onliner возвращает реальные товары.
 - [x] `ruff check .` и `pytest -q` проходят (13 тестов, парсеры на моках).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43223324140](https://github.com/evangreen165/price-aggregator/actions/runs/43223324140),
+      `conclusion: success` (backend: ruff + 13 тестов, frontend: typecheck + build).
+
+## CI
+
+Workflow `.github/workflows/ci.yml` отработал на push коммита `e45929f`:
+
+- run id `43223324140`, `conclusion: success`, длительность ~23 с;
+- job `backend`: `pip install -e ".[dev]"` → `ruff check .` → `pytest -q` (13 passed);
+- job `frontend`: `npm ci` → `npm run typecheck` → `npm run build`.
+
+Страница: <https://github.com/evangreen165/price-aggregator/actions>
 
 ## Замечания
 
