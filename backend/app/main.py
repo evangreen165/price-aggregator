@@ -298,6 +298,10 @@ def run_desktop() -> None:
         js_api=api,
     )
     api.window = window
+    # Keep a reference for open_link() but prevent pywebview's JS-bridge from
+    # recursively walking the Window -> native WebView2 control (its
+    # accessibility tree recurses without bound and crashes the GUI thread).
+    api.window._serializable = False
     logger.info("WebView window created, starting GUI loop")
     webview.start()
     logger.info("GUI loop exited")
