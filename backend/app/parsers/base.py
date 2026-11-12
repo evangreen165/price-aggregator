@@ -94,6 +94,7 @@ class BaseParser(ABC):
         region: str,
         limit_pages: int = 10,
         filters: dict[str, list[str]] | None = None,
+        page_start: int = 1,
     ) -> list[Product]:
         raise NotImplementedError
 

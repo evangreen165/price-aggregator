@@ -554,3 +554,15 @@ p {
 .error-banner strong {
   text-transform: capitalize;
 }
+
+.price-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.price-input {
+  width: 110px;
+  padding: 7px 10px;
+}

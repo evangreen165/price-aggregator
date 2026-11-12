@@ -37,6 +37,7 @@ class KufarParser(BaseParser):
         region: str,
         limit_pages: int = 10,
         filters: dict[str, list[str]] | None = None,
+        page_start: int = 1,
     ) -> list[Product]:
         products: list[Product] = []
         seen: set[str] = set()
@@ -50,9 +51,12 @@ class KufarParser(BaseParser):
                 return products
 
             pit = self._search_id(listing.get("pagination", []))
-            self._add_products(products, seen, listing.get("ads", []), region)
+            if page_start == 1:
+                self._add_products(products, seen, listing.get("ads", []), region)
 
-            for page in range(2, limit_pages + 1):
+            for page in range(page_start, page_start + limit_pages):
+                if page == 1:
+                    continue
                 if pit is None:
                     break
                 api_response = await client.get(
@@ -73,7 +77,7 @@ class KufarParser(BaseParser):
                 added = self._add_products(products, seen, ads, region)
                 if not added:
                     break
-                if page == limit_pages:
+                if page == page_start + limit_pages - 1:
                     self._truncated = True
                 if len(products) >= self.max_items:
                     self._truncated = True

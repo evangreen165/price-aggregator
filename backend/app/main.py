@@ -128,6 +128,7 @@ class SearchRequest(BaseModel):
     region: str = "belarus"
     limit_pages: int = 10
     filters: dict[str, list[str]] = {}
+    page_start: int = 1
 
 
 @app.post("/api/search")
@@ -143,7 +144,11 @@ async def search(req: SearchRequest) -> dict:
         meta[marketplace_id] = {"truncated": False}
         try:
             products = await parser.search(
-                req.query, req.region, req.limit_pages, req.filters
+                req.query,
+                req.region,
+                req.limit_pages,
+                req.filters,
+                req.page_start,
             )
             results[marketplace_id] = [product.to_dict() for product in products]
             meta[marketplace_id] = {"truncated": bool(getattr(parser, "_truncated", False))}

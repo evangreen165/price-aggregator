@@ -7,8 +7,9 @@ import { useSearchStore } from "../store/search";
 const MARKETPLACES = [
   { id: "kufar", label: "Kufar" },
   { id: "onliner", label: "Onliner" },
-  { id: "ozon", label: "Ozon" },
-  { id: "wb", label: "Wildberries" },
+  { id: "aliexpress", label: "AliExpress" },
+  { id: "21vek", label: "21vek.by" },
+  { id: "dealby", label: "Deal.by" },
 ];
 
 const priceFormat = new Intl.NumberFormat("ru-RU", {
@@ -99,19 +100,30 @@ export default function SearchPage() {
     products.map((product) => ({ ...product, marketplace })),
   );
 
+  const priceFiltered = allProducts.filter((product) => {
+    const price = product.price ?? 0;
+    if (search.minPrice !== null && price < search.minPrice) {
+      return false;
+    }
+    if (search.maxPrice !== null && price > search.maxPrice) {
+      return false;
+    }
+    return true;
+  });
+
   const totalPages =
     search.itemsPerPage > 0
-      ? Math.max(1, Math.ceil(allProducts.length / search.itemsPerPage))
+      ? Math.max(1, Math.ceil(priceFiltered.length / search.itemsPerPage))
       : 1;
   const currentPage = Math.min(search.currentPage, totalPages);
   const sliceStart = search.itemsPerPage > 0 ? (currentPage - 1) * search.itemsPerPage : 0;
   const visibleProducts =
     search.itemsPerPage > 0
-      ? allProducts.slice(sliceStart, sliceStart + search.itemsPerPage)
-      : allProducts;
+      ? priceFiltered.slice(sliceStart, sliceStart + search.itemsPerPage)
+      : priceFiltered;
   const sliceEnd = search.itemsPerPage > 0
-    ? Math.min(sliceStart + search.itemsPerPage, allProducts.length)
-    : allProducts.length;
+    ? Math.min(sliceStart + search.itemsPerPage, priceFiltered.length)
+    : priceFiltered.length;
   const truncated = Object.values(search.meta).some((entry) => entry.truncated);
 
   return (
@@ -224,7 +236,44 @@ export default function SearchPage() {
       <div className="card">
         <div className="card-header">
           <h3>Результаты</h3>
-          {status === "success" && <span className="muted">найдено: {allProducts.length}</span>}
+          {status === "success" && <span className="muted">найдено: {priceFiltered.length}</span>}
+        </div>
+
+        <div className="price-filter-row">
+          <label className="muted" htmlFor="min-price">
+            Цена от:
+          </label>
+          <input
+            id="min-price"
+            className="input price-input"
+            type="number"
+            min={0}
+            placeholder="от"
+            value={search.minPrice ?? ""}
+            onChange={(event) =>
+              search.setPriceRange(
+                event.target.value === "" ? null : Number(event.target.value),
+                search.maxPrice,
+              )
+            }
+          />
+          <label className="muted" htmlFor="max-price">
+            до:
+          </label>
+          <input
+            id="max-price"
+            className="input price-input"
+            type="number"
+            min={0}
+            placeholder="до"
+            value={search.maxPrice ?? ""}
+            onChange={(event) =>
+              search.setPriceRange(
+                search.minPrice,
+                event.target.value === "" ? null : Number(event.target.value),
+              )
+            }
+          />
         </div>
 
         {Object.keys(errors).length > 0 && (
@@ -297,17 +346,25 @@ export default function SearchPage() {
             )}
 
             <div className="results-footer">
+              <button
+                className="button"
+                type="button"
+                onClick={() => search.loadMore()}
+                disabled={search.status === "loading"}
+              >
+                Загрузить ещё {search.itemsPerPage} товаров
+              </button>
               <p className="muted">
-                Найдено {allProducts.length} товаров
+                Найдено {priceFiltered.length} товаров
                 {search.itemsPerPage > 0 &&
                   `, показано ${sliceStart + 1}–${sliceEnd}`}
               </p>
-            {truncated && (
-              <p className="muted">
-                Показаны не все результаты (достигнут лимит парсинга).
-              </p>
-            )}
-          </div>
+              {truncated && (
+                <p className="muted">
+                  Показаны не все результаты (достигнут лимит парсинга).
+                </p>
+              )}
+            </div>
           </>
         )}
 

@@ -32,6 +32,7 @@ export type SearchRequest = {
   region: string;
   limit_pages?: number;
   filters?: Record<string, string[]>;
+  page_start?: number;
 };
 
 export type SearchResponse = {

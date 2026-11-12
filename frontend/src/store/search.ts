@@ -22,9 +22,13 @@ type SearchStore = {
   currentPage: number;
   itemsPerPage: number;
   deepPagination: boolean;
+  pageStart: number;
+  minPrice: number | null;
+  maxPrice: number | null;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
-  runSearch: () => Promise<void>;
+  runSearch: (mode?: { pageStart?: number; append?: boolean }) => Promise<void>;
+  loadMore: () => Promise<void>;
   setFilters: (category: string | null, filters: FilterOption[]) => void;
   setFiltersLoading: (loading: boolean) => void;
   toggleFilterOption: (key: string, option: string) => void;
@@ -33,6 +37,7 @@ type SearchStore = {
   setCurrentPage: (page: number) => void;
   setItemsPerPage: (count: number) => void;
   setDeepPagination: (enabled: boolean) => void;
+  setPriceRange: (min: number | null, max: number | null) => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -51,6 +56,9 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   currentPage: 1,
   itemsPerPage: 50,
   deepPagination: false,
+  pageStart: 1,
+  minPrice: null,
+  maxPrice: null,
 
   setQuery: (query) => set({ query }),
 
@@ -61,11 +69,13 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         : [...state.marketplaces, id],
     })),
 
-  runSearch: async () => {
+  runSearch: async (mode) => {
     const { query, marketplaces, selectedFilters, deepPagination } = get();
     const filters = Object.fromEntries(
       Object.entries(selectedFilters).filter(([, options]) => options.length > 0),
     );
+    const pageStart = mode?.pageStart ?? 1;
+    const append = mode?.append ?? false;
     set({ status: "loading", requestError: null });
     try {
       const response = await searchProducts({
@@ -74,14 +84,35 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         region: "belarus",
         limit_pages: deepPagination ? 50 : 10,
         filters,
+        page_start: pageStart,
       });
-      set({
-        status: "success",
-        results: response.results,
-        errors: response.errors,
-        meta: response.meta,
-        currentPage: 1,
-      });
+      if (append) {
+        const merged: Record<string, Product[]> = {};
+        for (const [marketplace, products] of Object.entries(response.results)) {
+          const existing = get().results[marketplace] ?? [];
+          const seen = new Set(existing.map((product) => product.url));
+          merged[marketplace] = [
+            ...existing,
+            ...products.filter((product) => !seen.has(product.url)),
+          ];
+        }
+        set({
+          status: "success",
+          results: merged,
+          errors: response.errors,
+          meta: response.meta,
+          pageStart: pageStart + 1,
+        });
+      } else {
+        set({
+          status: "success",
+          results: response.results,
+          errors: response.errors,
+          meta: response.meta,
+          currentPage: 1,
+          pageStart: 2,
+        });
+      }
     } catch (error) {
       set({
         status: "error",
@@ -90,6 +121,11 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         requestError: error instanceof Error ? error.message : String(error),
       });
     }
+  },
+
+  loadMore: async () => {
+    const { pageStart } = get();
+    await get().runSearch({ pageStart, append: true });
   },
 
   setFilters: (filtersCategory, filters) => set({ filtersCategory, filters }),
@@ -114,4 +150,6 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setItemsPerPage: (itemsPerPage) => set({ itemsPerPage, currentPage: 1 }),
 
   setDeepPagination: (deepPagination) => set({ deepPagination }),
+
+  setPriceRange: (minPrice, maxPrice) => set({ minPrice, maxPrice }),
 }));
