@@ -381,3 +381,28 @@ p {
   font-size: 16px;
   font-weight: 700;
 }
+
+.filters-box {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 24px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 160px;
+}
+
+.filter-group legend {
+  padding: 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}

@@ -37,6 +37,18 @@ export type SearchResponse = {
   errors: Record<string, string>;
 };
 
+export type FilterOption = {
+  key: string;
+  label: string;
+  options: string[];
+};
+
+export type FiltersResponse = {
+  query: string;
+  category: string;
+  filters: FilterOption[];
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 async function apiGet<T>(path: string): Promise<T> {
@@ -75,4 +87,8 @@ export function reloadPlugins(): Promise<PluginsReloadResponse> {
 
 export function searchProducts(request: SearchRequest): Promise<SearchResponse> {
   return apiPost<SearchResponse>("/api/search", request);
+}
+
+export function getFilters(query: string): Promise<FiltersResponse> {
+  return apiGet<FiltersResponse>(`/api/filters?query=${encodeURIComponent(query)}`);
 }

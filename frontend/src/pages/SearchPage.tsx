@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
 
-import { Product, searchProducts } from "../api/client";
+import { getFilters, Product } from "../api/client";
+import { useSearchStore } from "../store/search";
 
 const MARKETPLACES = [
   { id: "kufar", label: "Kufar" },
@@ -20,14 +20,18 @@ function ProductCard({ product }: { product: Product }) {
     <li className="result-card">
       <div className="result-card-top">
         <span className="badge">{product.marketplace}</span>
-        <a className="result-title" href={product.url}>
+        <a
+          className="result-title"
+          href={product.url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           {product.title}
         </a>
       </div>
       <div className="result-meta">
         <span className="result-price">
-          {product.price === null ? "—" : priceFormat.format(product.price)}{" "}
-          {product.currency}
+          {product.price === null ? "—" : priceFormat.format(product.price)} {product.currency}
         </span>
         <span className="muted">
           регион: {product.region} · {new Date(product.parsed_at).toLocaleString("ru-RU")}
@@ -38,33 +42,44 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export default function SearchPage() {
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<string[]>(["kufar", "onliner"]);
+  const search = useSearchStore();
+  const { query, marketplaces, status, results, errors, requestError } = search;
 
-  const search = useMutation({
-    mutationFn: searchProducts,
-  });
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      search.setFilters(null, []);
+      search.setFiltersLoading(false);
+      return;
+    }
+    search.setFiltersLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const response = await getFilters(trimmed);
+        search.setFilters(response.category, response.filters);
+      } catch {
+        search.setFilters(null, []);
+      } finally {
+        search.setFiltersLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-  const toggleMarketplace = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
-  };
+  const canSubmit = query.trim().length > 0 && marketplaces.length > 0 && status !== "loading";
 
-  const canSubmit = query.trim().length > 0 && selected.length > 0 && !search.isPending;
-
-  const allProducts =
-    search.data === undefined
-      ? []
-      : Object.entries(search.data.results).flatMap(([marketplace, products]) =>
-          products.map((product) => ({ ...product, marketplace })),
-        );
+  const allProducts = Object.entries(results).flatMap(([marketplace, products]) =>
+    products.map((product) => ({ ...product, marketplace })),
+  );
 
   return (
     <section className="page">
       <header className="page-header">
         <h2>Поиск</h2>
-        <p>Поиск по выбранным маркетплейсам. Kufar и Onliner работают, Ozon и Wildberries — задел на потом.</p>
+        <p>
+          Поиск по выбранным маркетплейсам. Kufar и Onliner работают, Ozon и Wildberries — задел
+          на потом.
+        </p>
       </header>
 
       <div className="card">
@@ -72,7 +87,7 @@ export default function SearchPage() {
           className="search-row"
           onSubmit={(event) => {
             event.preventDefault();
-            search.mutate({ query: query.trim(), marketplaces: selected, region: "belarus" });
+            search.runSearch();
           }}
         >
           <input
@@ -80,10 +95,10 @@ export default function SearchPage() {
             type="text"
             placeholder="Например: монитор"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => search.setQuery(event.target.value)}
           />
           <button className="button primary" type="submit" disabled={!canSubmit}>
-            {search.isPending ? "Ищем…" : "Найти"}
+            {status === "loading" ? "Ищем…" : "Найти"}
           </button>
         </form>
 
@@ -92,54 +107,79 @@ export default function SearchPage() {
             <label className="checkbox" key={marketplace.id}>
               <input
                 type="checkbox"
-                checked={selected.includes(marketplace.id)}
-                onChange={() => toggleMarketplace(marketplace.id)}
+                checked={marketplaces.includes(marketplace.id)}
+                onChange={() => search.toggleMarketplace(marketplace.id)}
               />
               <span className="badge">{marketplace.id}</span>
               {marketplace.label}
             </label>
           ))}
         </div>
-        <p className="muted">Регион: Беларусь (параметр region для будущих фильтров).</p>
+
+        {search.filtersLoading && <p className="muted">Подбираем фильтры…</p>}
+        {!search.filtersLoading && search.filters.length > 0 && (
+          <div className="filters-box">
+            {search.filters.map((group) => (
+              <fieldset className="filter-group" key={group.key}>
+                <legend>{group.label}</legend>
+                {group.options.map((option) => {
+                  const checked = search.selectedFilters[group.key]?.includes(option) ?? false;
+                  return (
+                    <label className="checkbox" key={option}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => search.toggleFilterOption(group.key, option)}
+                      />
+                      {option}
+                    </label>
+                  );
+                })}
+              </fieldset>
+            ))}
+          </div>
+        )}
+
+        <p className="muted">
+          Регион: Беларусь. Передача выбранных фильтров в парсеры — следующий шаг.
+        </p>
       </div>
 
       <div className="card">
         <div className="card-header">
           <h3>Результаты</h3>
-          {search.isSuccess && (
-            <span className="muted">найдено: {allProducts.length}</span>
-          )}
+          {status === "success" && <span className="muted">найдено: {allProducts.length}</span>}
         </div>
 
-        {search.isPending && <p className="muted">Запрашиваем маркетплейсы…</p>}
+        {status === "loading" && <p className="muted">Запрашиваем маркетплейсы…</p>}
 
-        {search.isError && (
+        {status === "error" && (
           <p className="status error">
-            Ошибка запроса: {search.error instanceof Error ? search.error.message : String(search.error)}
+            Ошибка запроса: {requestError ?? "неизвестная ошибка"}
           </p>
         )}
 
-        {search.isSuccess && allProducts.length === 0 && (
+        {status === "success" && allProducts.length === 0 && (
           <p className="muted">
             Товары не найдены.
-            {Object.keys(search.data.errors).length > 0 &&
-              ` Ошибки: ${Object.entries(search.data.errors)
+            {Object.keys(errors).length > 0 &&
+              ` Ошибки: ${Object.entries(errors)
                 .map(([id, message]) => `${id}: ${message}`)
                 .join("; ")}`}
           </p>
         )}
 
-        {search.isSuccess && allProducts.length > 0 && (
+        {status === "success" && allProducts.length > 0 && (
           <>
             <ul className="result-list">
               {allProducts.map((product) => (
                 <ProductCard key={`${product.marketplace}-${product.url}`} product={product} />
               ))}
             </ul>
-            {Object.keys(search.data.errors).length > 0 && (
+            {Object.keys(errors).length > 0 && (
               <p className="status error">
                 Частичные ошибки:{" "}
-                {Object.entries(search.data.errors)
+                {Object.entries(errors)
                   .map(([id, message]) => `${id}: ${message}`)
                   .join("; ")}
               </p>
@@ -147,7 +187,7 @@ export default function SearchPage() {
           </>
         )}
 
-        {search.isIdle && <p className="muted">Введите запрос и нажмите «Найти».</p>}
+        {status === "idle" && <p className="muted">Введите запрос и нажмите «Найти».</p>}
       </div>
     </section>
   );

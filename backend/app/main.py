@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from app.core.config import APP_NAME, FRONTEND_DIST, HOST, IS_FROZEN, LOG_FILE, PORT
 from app.parsers import get_parser
+from app.parsers.categories import classify, filters_for_query
 from app.plugins import get_manager
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,11 @@ app = FastAPI(title=APP_NAME, lifespan=lifespan)
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/filters")
+def filters(query: str = "") -> dict:
+    return {"query": query, "category": classify(query), "filters": filters_for_query(query)}
 
 
 @app.get("/api/plugins")
