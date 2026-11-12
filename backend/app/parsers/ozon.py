@@ -1,20 +1,35 @@
-"""Ozon parser: best-effort extraction from the composer API via curl_cffi."""
+"""Ozon parser: composer API with Playwright browser fallback."""
 
 from __future__ import annotations
 
 import json
 from datetime import datetime
+from urllib.parse import quote
 
-from app.parsers.base import BaseParser, Product
+from app.parsers.base import BaseParser, Product, launch_chromium
 
 WARM_URL = "https://www.ozon.ru/"
 COMPOSER_URL = "https://www.ozon.ru/api/composer-api.bx/page/json/v2"
+SEARCH_PAGE_URL = "https://www.ozon.ru/search/"
 
 HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
     "Origin": "https://www.ozon.ru",
 }
+
+_EVALUATE_JS = """
+() => {
+  if (window.__NUXT__ && window.__NUXT__.data) {
+    return JSON.stringify(window.__NUXT__);
+  }
+  const node = document.querySelector('script#__NEXT_DATA__');
+  if (node && node.textContent) {
+    return node.textContent;
+  }
+  return null;
+}
+"""
 
 
 def _parse_price(value: object) -> float | None:
@@ -38,7 +53,7 @@ def _parse_price(value: object) -> float | None:
 class OzonParser(BaseParser):
     marketplace_id = "ozon"
     name = "Ozon"
-    version = "0.5.0"
+    version = "0.6.0"
 
     def __init__(self, fetcher=None) -> None:
         super().__init__()
@@ -63,20 +78,53 @@ class OzonParser(BaseParser):
         limit_pages: int = 10,
         filters: dict[str, list[str]] | None = None,
     ) -> list[Product]:
-        params = {"url": f"/search/?text={query}"}
-
-        if self._fetcher is not None:
-            data = await self._fetch_json_from(self._fetcher, COMPOSER_URL, params)
-        else:
-            from curl_cffi.requests import AsyncSession
-
-            async with AsyncSession(impersonate="chrome") as session:
-                await session.get(WARM_URL, headers=HEADERS, timeout=20)
-                data = await self._fetch_json_from(session, COMPOSER_URL, params)
-
+        data = await self._curl_search_data(query)
+        if data is None:
+            data = await self._browser_search_data(query)
         if data is None:
             return []
         return self._apply_filters(self._extract(data, region), filters)
+
+    async def _curl_search_data(self, query: str) -> object | None:
+        params = {"url": f"/search/?text={query}"}
+        if self._fetcher is not None:
+            return await self._fetch_json_from(self._fetcher, COMPOSER_URL, params)
+        from curl_cffi.requests import AsyncSession
+
+        async with AsyncSession(impersonate="chrome") as session:
+            await session.get(WARM_URL, headers=HEADERS, timeout=20)
+            return await self._fetch_json_from(session, COMPOSER_URL, params)
+
+    async def _browser_search_data(self, query: str) -> object | None:
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            return None
+        try:
+            async with async_playwright() as p:
+                browser = await launch_chromium(p)
+                if browser is None:
+                    return None
+                page = await browser.new_page()
+                await page.goto(
+                    f"{SEARCH_PAGE_URL}?text={quote(query)}",
+                    timeout=60000,
+                    wait_until="domcontentloaded",
+                )
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:  # noqa: BLE001
+                    pass
+                text = await page.evaluate(_EVALUATE_JS)
+                await browser.close()
+                if not text:
+                    return None
+                try:
+                    return json.loads(text)
+                except ValueError:
+                    return None
+        except Exception:  # noqa: BLE001
+            return None
 
     def _extract(self, data: object, region: str) -> list[Product]:
         products: list[Product] = []

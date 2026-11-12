@@ -21,6 +21,7 @@ type SearchStore = {
   linkOpenMode: LinkOpenMode;
   currentPage: number;
   itemsPerPage: number;
+  deepPagination: boolean;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
   runSearch: () => Promise<void>;
@@ -31,6 +32,7 @@ type SearchStore = {
   setLinkOpenMode: (mode: LinkOpenMode) => void;
   setCurrentPage: (page: number) => void;
   setItemsPerPage: (count: number) => void;
+  setDeepPagination: (enabled: boolean) => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -48,6 +50,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   linkOpenMode: "current_window",
   currentPage: 1,
   itemsPerPage: 50,
+  deepPagination: false,
 
   setQuery: (query) => set({ query }),
 
@@ -59,7 +62,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     })),
 
   runSearch: async () => {
-    const { query, marketplaces, selectedFilters } = get();
+    const { query, marketplaces, selectedFilters, deepPagination } = get();
     const filters = Object.fromEntries(
       Object.entries(selectedFilters).filter(([, options]) => options.length > 0),
     );
@@ -69,7 +72,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         query: query.trim(),
         marketplaces,
         region: "belarus",
-        limit_pages: 10,
+        limit_pages: deepPagination ? 50 : 10,
         filters,
       });
       set({
@@ -109,4 +112,6 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setCurrentPage: (currentPage) => set({ currentPage }),
 
   setItemsPerPage: (itemsPerPage) => set({ itemsPerPage, currentPage: 1 }),
+
+  setDeepPagination: (deepPagination) => set({ deepPagination }),
 }));

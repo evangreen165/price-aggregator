@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.parsers.base import BaseParser
 from app.parsers.categories import classify, filters_for_query, find_brand
 
 
@@ -104,6 +105,55 @@ def test_tablet_filters_endpoint() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["category"] == "tablets"
+    assert any(entry["label"] == "Диагональ экрана" for entry in body["filters"])
+
+
+def test_filters_endpoint_uses_marketplace_dynamic_filters(monkeypatch) -> None:
+    class FakeKufar(BaseParser):
+        marketplace_id = "kufar"
+
+        async def search(self, query, region, limit_pages=10, filters=None):
+            return []
+
+        async def fetch_filters(self, query: str) -> list[dict]:
+            return [{"key": "prn", "label": "Категория", "options": ["Планшеты", "Смартфоны"]}]
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return FakeKufar() if marketplace_id == "kufar" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/filters", params={"query": "планшет", "marketplace": "kufar"}
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["filters"][0] == {
+        "key": "prn",
+        "label": "Категория",
+        "options": ["Планшеты", "Смартфоны"],
+    }
+
+
+def test_filters_endpoint_falls_back_to_static_on_error(monkeypatch) -> None:
+    class BrokenKufar(BaseParser):
+        marketplace_id = "kufar"
+
+        async def search(self, query, region, limit_pages=10, filters=None):
+            return []
+
+        async def fetch_filters(self, query: str) -> list[dict]:
+            raise RuntimeError("network down")
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return BrokenKufar() if marketplace_id == "kufar" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/filters", params={"query": "планшет", "marketplace": "kufar"}
+        )
+    body = response.json()
     assert any(entry["label"] == "Диагональ экрана" for entry in body["filters"])
 
 

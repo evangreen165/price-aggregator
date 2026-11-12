@@ -5,6 +5,7 @@ import json
 import httpx
 
 from app.parsers import PARSERS, get_parser, list_parsers
+from app.parsers.base import Product
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
 from app.parsers.ozon import OzonParser
@@ -280,3 +281,79 @@ def test_registry_lists_and_resolves_all_parsers() -> None:
     assert get_parser("unknown") is None
     ids = {entry["marketplace_id"] for entry in list_parsers()}
     assert ids == set(PARSERS)
+
+
+KUFAR_FILTERS_HTML = """
+<html><body><script id="__NEXT_DATA__" type="application/json">
+{"props":{"initialState":{"filters":{"currentFilters":[
+  {"url_name":"prn","labels":{"name":{"ru":"Категория"}},
+   "values":[{"labels":{"ru":"Планшеты"}},{"labels":{"ru":"Смартфоны"}}]},
+  {"url_name":"bt","labels":{"name":{"ru":"Бренд"}},
+   "values":[{"labels":{"ru":"Apple"}},{"labels":{"ru":"Samsung"}}]}
+]}}}}
+</script></body></html>
+"""
+
+
+def test_kufar_fetch_filters() -> None:
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, text=KUFAR_FILTERS_HTML))
+    parser = KufarParser(client=httpx.AsyncClient(transport=transport))
+    filters = asyncio.run(parser.fetch_filters("планшет"))
+    assert len(filters) == 2
+    assert filters[0]["label"] == "Категория"
+    assert "Планшеты" in filters[0]["options"]
+    assert filters[1]["key"] == "bt"
+
+
+def test_kufar_search_caps_items() -> None:
+    many = [
+        {
+            "subject": f"Товар {index}",
+            "ad_link": f"https://www.kufar.by/item/{index}",
+            "price_byn": 10000 + index,
+            "ad_parameters": [],
+        }
+        for index in range(3, 500)
+    ]
+    handler = _kufar_handler(KUFAR_HTML, {2: many[:2], 3: many[2:]})
+    parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    parser.max_items = 3
+    products = asyncio.run(parser.search("монитор", "belarus", limit_pages=3))
+    assert len(products) == 4
+    assert parser._truncated is True
+
+
+def test_wb_falls_back_to_browser(monkeypatch) -> None:
+    transport = httpx.MockTransport(lambda _request: httpx.Response(403))
+    parser = WbParser(fetcher=httpx.AsyncClient(transport=transport))
+
+    async def fake_browser(query, region, products, seen) -> None:
+        products.append(
+            Product(
+                title="Browser TV Samsung",
+                price=99.0,
+                old_price=None,
+                currency="BYN",
+                url="https://www.wildberries.ru/catalog/777/detail.aspx",
+                marketplace="wb",
+                region=region,
+            )
+        )
+
+    monkeypatch.setattr(parser, "_browser_search", fake_browser)
+    products = asyncio.run(parser.search("телевизор", "belarus"))
+    assert len(products) == 1
+    assert "Samsung" in products[0].title
+
+
+def test_ozon_falls_back_to_browser(monkeypatch) -> None:
+    transport = httpx.MockTransport(lambda _request: httpx.Response(403))
+    parser = OzonParser(fetcher=httpx.AsyncClient(transport=transport))
+
+    async def fake_browser_data(query: str) -> object:
+        return OZON_JSON
+
+    monkeypatch.setattr(parser, "_browser_search_data", fake_browser_data)
+    products = asyncio.run(parser.search("телевизор", "belarus"))
+    assert len(products) == 2
+    assert products[0].marketplace == "ozon"

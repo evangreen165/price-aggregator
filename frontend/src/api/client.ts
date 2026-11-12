@@ -92,6 +92,10 @@ export function searchProducts(request: SearchRequest): Promise<SearchResponse> 
   return apiPost<SearchResponse>("/api/search", request);
 }
 
-export function getFilters(query: string): Promise<FiltersResponse> {
-  return apiGet<FiltersResponse>(`/api/filters?query=${encodeURIComponent(query)}`);
+export function getFilters(query: string, marketplace?: string): Promise<FiltersResponse> {
+  const params = new URLSearchParams({ query });
+  if (marketplace) {
+    params.set("marketplace", marketplace);
+  }
+  return apiGet<FiltersResponse>(`/api/filters?${params.toString()}`);
 }

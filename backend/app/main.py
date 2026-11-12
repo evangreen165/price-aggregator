@@ -65,14 +65,20 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/filters")
-def filters(query: str = "") -> dict:
+async def filters(query: str = "", marketplace: str = "") -> dict:
     categories = classify(query)
-    return {
-        "query": query,
-        "category": categories[0],
-        "categories": categories,
-        "filters": filters_for_query(query),
-    }
+    payload = {"query": query, "category": categories[0], "categories": categories}
+    if marketplace == "kufar":
+        parser = get_parser("kufar")
+        try:
+            dynamic = await parser.fetch_filters(query)
+        except Exception:  # noqa: BLE001 - fall back to the static classifier
+            dynamic = []
+        if dynamic:
+            payload["filters"] = dynamic
+            return payload
+    payload["filters"] = filters_for_query(query)
+    return payload
 
 
 _PROXY_HEADERS = {

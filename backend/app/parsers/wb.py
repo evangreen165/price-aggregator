@@ -1,13 +1,15 @@
-"""Wildberries parser: public search JSON API via curl_cffi."""
+"""Wildberries parser: public search JSON API, browser fallback via Playwright."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from urllib.parse import quote
 
-from app.parsers.base import BaseParser, Product
+from app.parsers.base import BaseParser, Product, launch_chromium
 
 WARM_URL = "https://www.wildberries.ru/"
 SEARCH_URL = "https://search.wb.ru/exactmatch/ru/common/v4/search"
+SEARCH_PAGE_URL = "https://www.wildberries.ru/catalog/0/search.aspx"
 DEST_PARAMS = "-1257783,1229390,1505371,1509256"
 
 HEADERS = {
@@ -27,7 +29,7 @@ def _price_from_kopecks(value: object) -> float | None:
 class WbParser(BaseParser):
     marketplace_id = "wb"
     name = "Wildberries"
-    version = "0.5.0"
+    version = "0.6.0"
 
     def __init__(self, fetcher=None) -> None:
         super().__init__()
@@ -56,6 +58,14 @@ class WbParser(BaseParser):
         seen: set[str] = set()
         self._truncated = False
 
+        if not await self._curl_search(query, region, limit_pages, products, seen):
+            await self._browser_search(query, region, products, seen)
+
+        return self._apply_filters(products, filters)
+
+    async def _curl_search(
+        self, query: str, region: str, limit_pages: int, products: list[Product], seen: set[str]
+    ) -> bool:
         if self._fetcher is not None:
             session = self._fetcher
             for page in range(1, limit_pages + 1):
@@ -71,26 +81,68 @@ class WbParser(BaseParser):
                     break
                 if page == limit_pages:
                     self._truncated = True
-        else:
-            from curl_cffi.requests import AsyncSession
+            return bool(products)
 
-            async with AsyncSession(impersonate="chrome") as session:
-                await session.get(WARM_URL, headers=HEADERS, timeout=20)
-                for page in range(1, limit_pages + 1):
-                    data = await self._fetch_json_from(
-                        session,
-                        SEARCH_URL,
-                        {"query": query, "dest": DEST_PARAMS, "resultset": "catalog", "page": page},
-                    )
-                    if data is None:
-                        break
-                    added = self._add_products(products, seen, data, region)
-                    if not added:
-                        break
-                    if page == limit_pages:
-                        self._truncated = True
+        from curl_cffi.requests import AsyncSession
 
-        return self._apply_filters(products, filters)
+        async with AsyncSession(impersonate="chrome") as session:
+            await session.get(WARM_URL, headers=HEADERS, timeout=20)
+            for page in range(1, limit_pages + 1):
+                data = await self._fetch_json_from(
+                    session,
+                    SEARCH_URL,
+                    {"query": query, "dest": DEST_PARAMS, "resultset": "catalog", "page": page},
+                )
+                if data is None:
+                    break
+                added = self._add_products(products, seen, data, region)
+                if not added:
+                    break
+                if page == limit_pages:
+                    self._truncated = True
+        return bool(products)
+
+    async def _browser_search(
+        self, query: str, region: str, products: list[Product], seen: set[str]
+    ) -> None:
+        data = await self._fetch_browser_search_data(query)
+        if data is not None:
+            self._add_products(products, seen, data, region)
+
+    async def _fetch_browser_search_data(self, query: str) -> object | None:
+        try:
+            from playwright.async_api import async_playwright
+        except ImportError:
+            return None
+        try:
+            async with async_playwright() as p:
+                browser = await launch_chromium(p)
+                if browser is None:
+                    return None
+                page = await browser.new_page()
+                captured: list[object] = []
+
+                async def on_response(response) -> None:
+                    if "search.wb.ru" in response.url:
+                        try:
+                            captured.append(await response.json())
+                        except Exception:  # noqa: BLE001
+                            pass
+
+                page.on("response", on_response)
+                await page.goto(
+                    f"{SEARCH_PAGE_URL}?search={quote(query)}",
+                    timeout=60000,
+                    wait_until="domcontentloaded",
+                )
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:  # noqa: BLE001
+                    pass
+                await browser.close()
+                return captured[0] if captured else None
+        except Exception:  # noqa: BLE001
+            return None
 
     def _add_products(
         self, products: list[Product], seen: set[str], data: object, region: str

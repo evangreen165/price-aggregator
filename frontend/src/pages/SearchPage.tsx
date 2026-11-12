@@ -79,9 +79,10 @@ export default function SearchPage() {
       return;
     }
     search.setFiltersLoading(true);
+    const marketplace = marketplaces.length === 1 ? marketplaces[0] : undefined;
     const timer = setTimeout(async () => {
       try {
-        const response = await getFilters(trimmed);
+        const response = await getFilters(trimmed, marketplace);
         search.setFilters(response.category, response.filters);
       } catch {
         search.setFilters(null, []);
@@ -90,7 +91,7 @@ export default function SearchPage() {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, marketplaces]);
 
   const canSubmit = query.trim().length > 0 && marketplaces.length > 0 && status !== "loading";
 
@@ -208,6 +209,15 @@ export default function SearchPage() {
             <option value={0}>Все</option>
           </select>
         </div>
+
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={search.deepPagination}
+            onChange={(event) => search.setDeepPagination(event.target.checked)}
+          />
+          Глубокая пагинация (медленнее, до 50 страниц)
+        </label>
 
         <p className="muted">Регион: Беларусь. Выбранные фильтры применяются к результатам.</p>
       </div>

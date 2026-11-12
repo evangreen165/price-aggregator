@@ -24,6 +24,16 @@ DEFAULT_HEADERS = {
 DEFAULT_TIMEOUT = httpx.Timeout(20.0)
 
 
+async def launch_chromium(playwright) -> object | None:
+    """Launch Chromium for scraping, preferring the user's installed browser."""
+    for kwargs in ({"channel": "chrome"}, {"channel": "msedge"}, {}):
+        try:
+            return await playwright.chromium.launch(headless=True, **kwargs)
+        except Exception:  # noqa: BLE001 - try the next browser option
+            continue
+    return None
+
+
 @dataclass
 class Product:
     title: str

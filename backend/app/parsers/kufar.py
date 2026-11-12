@@ -13,6 +13,8 @@ from app.parsers.base import BaseParser, Product
 SEARCH_URL = "https://www.kufar.by/l"
 RENDERED_API_URL = "https://api.kufar.by/search-api/v2/search/rendered"
 PAGE_SIZE = 50
+MAX_ITEMS = 2000
+MAX_FILTERS = 15
 
 
 def _price_from_kopecks(value: object) -> float | None:
@@ -25,7 +27,9 @@ def _price_from_kopecks(value: object) -> float | None:
 class KufarParser(BaseParser):
     marketplace_id = "kufar"
     name = "Kufar"
-    version = "0.4.0"
+    version = "0.5.0"
+    max_items = MAX_ITEMS
+    max_filters = MAX_FILTERS
 
     async def search(
         self,
@@ -71,20 +75,54 @@ class KufarParser(BaseParser):
                     break
                 if page == limit_pages:
                     self._truncated = True
+                if len(products) >= self.max_items:
+                    self._truncated = True
+                    break
 
         return self._apply_filters(products, filters)
 
     @staticmethod
-    def _parse_listing(html: str) -> dict | None:
+    def _parse_state(html: str) -> dict | None:
         soup = BeautifulSoup(html, "html.parser")
         node = soup.find("script", id="__NEXT_DATA__")
         if node is None or not node.string:
             return None
         try:
             data = json.loads(node.string)
-            return data["props"]["initialState"]["listing"]
+            return data["props"]["initialState"]
         except (KeyError, TypeError, json.JSONDecodeError):
             return None
+
+    @classmethod
+    def _parse_listing(cls, html: str) -> dict | None:
+        state = cls._parse_state(html)
+        return state.get("listing") if state else None
+
+    async def fetch_filters(self, query: str) -> list[dict]:
+        """Return the marketplace filter definitions embedded in the search page."""
+        async with self._client() as client:
+            response = await client.get(SEARCH_URL, params={"query": query})
+            response.raise_for_status()
+            state = self._parse_state(response.text)
+        if not state:
+            return []
+        current = state.get("filters", {}).get("currentFilters", [])
+        merged: list[dict] = []
+        for entry in current:
+            labels = entry.get("labels") or {}
+            label = (labels.get("name") or {}).get("ru")
+            key = entry.get("url_name") or entry.get("name")
+            options = [
+                (value.get("labels") or {}).get("ru")
+                for value in (entry.get("values") or [])
+                if (value.get("labels") or {}).get("ru")
+            ]
+            if not label or not key or not options:
+                continue
+            merged.append({"key": key, "label": label, "options": options[:30]})
+            if len(merged) >= self.max_filters:
+                break
+        return merged
 
     @staticmethod
     def _search_id(pagination: list[dict]) -> str | None:
