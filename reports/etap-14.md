@@ -67,7 +67,7 @@ Bounds -> ...`) рекурсируется без границ → `maximum recu
 - [x] «Загрузить ещё» докачивает до конца (0 → «Это все товары»), новые товары добавляются в конец.
 - [ ] OZ.by/WB.by добавлены — **не выполнено**: OZ.by без товаров, WB.by блокирует IP.
 - [x] CI на GitHub зеленый — run
-      [#43291140777](https://github.com/evangreen165/price-aggregator/actions/runs/43291140777),
+      [#43294803835](https://github.com/evangreen165/price-aggregator/actions/runs/43294803835),
       `conclusion: success` (backend: ruff + 22 теста, frontend: typecheck + build).
 
 ## Замечания
