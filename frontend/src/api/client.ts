@@ -25,6 +25,7 @@ export type Product = {
   region: string;
   parsed_at: string;
   rating?: number | null;
+  image?: string | null;
 };
 
 export type SearchRequest = {

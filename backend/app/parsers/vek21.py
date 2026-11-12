@@ -40,8 +40,7 @@ def _parse_price(value: object) -> float | None:
 class TwentyOneVekParser(BaseParser):
     marketplace_id = "21vek"
     name = "21vek.by"
-    version = "0.8.0"
-    max_items = 5000
+    version = "0.9.0"
 
     async def search(
         self,
@@ -72,9 +71,6 @@ class TwentyOneVekParser(BaseParser):
                     break
                 if page == page_start + limit_pages - 1:
                     self._truncated = True
-                if len(products) >= self.max_items:
-                    self._truncated = True
-                    break
 
         return self._apply_filters(products, filters)
 

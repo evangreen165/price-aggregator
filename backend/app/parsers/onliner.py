@@ -8,14 +8,12 @@ from app.parsers.base import BaseParser, Product
 
 SEARCH_URL = "https://catalog.onliner.by/sdapi/catalog.api/search/products"
 PAGE_LIMIT = 100
-MAX_ITEMS = 5000
 
 
 class OnlinerParser(BaseParser):
     marketplace_id = "onliner"
     name = "Onliner"
-    version = "0.8.0"
-    max_items = MAX_ITEMS
+    version = "0.9.0"
 
     async def search(
         self,
@@ -47,9 +45,6 @@ class OnlinerParser(BaseParser):
                     break
                 if page == page_start + limit_pages - 1:
                     self._truncated = True
-                if len(products) >= self.max_items:
-                    self._truncated = True
-                    break
 
         return self._apply_filters(products, filters)
 

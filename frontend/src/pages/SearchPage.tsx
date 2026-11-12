@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 
 import { Product } from "../api/client";
 import { SortMode, useSearchStore } from "../store/search";
-
 const MARKETPLACES = [
   { id: "kufar", label: "Kufar" },
   { id: "onliner", label: "Onliner" },
@@ -34,10 +33,11 @@ function pageWindow(current: number, total: number): (number | "…")[] {
 
 function ProductCard({ product }: { product: Product }) {
   const linkOpenMode = useSearchStore((state) => state.linkOpenMode);
+  const viewMode = useSearchStore((state) => state.viewMode);
   const navigate = useNavigate();
 
-  const openProduct = (event: MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
+  const openProduct = (event?: MouseEvent<HTMLAnchorElement>) => {
+    event?.preventDefault();
     const api = window.pywebview?.api;
     if (api?.open_link) {
       api.open_link(product.url, linkOpenMode);
@@ -46,11 +46,52 @@ function ProductCard({ product }: { product: Product }) {
     }
   };
 
+  const isDiscount =
+    product.old_price !== null &&
+    product.old_price !== undefined &&
+    product.old_price > (product.price ?? 0);
+
+  if (viewMode === "grid") {
+    return (
+      <li className="product-grid-card">
+        {product.image ? (
+          <img className="thumb" src={product.image} alt="" loading="lazy" />
+        ) : (
+          <div className="thumb placeholder-thumb" aria-hidden="true">
+            {product.title.charAt(0).toUpperCase()}
+          </div>
+        )}
+        <span className="badge">{product.marketplace}</span>
+        <a
+          className="result-title"
+          href={product.url}
+          onClick={(event) => openProduct(event)}
+        >
+          {product.title}
+        </a>
+        <div className="grid-prices">
+          <span className="result-price">
+            {product.price === null ? "—" : priceFormat.format(product.price)}{" "}
+            {product.currency}
+          </span>
+          {isDiscount && product.old_price != null && (
+            <span className="old-price">
+              {priceFormat.format(product.old_price)} {product.currency}
+            </span>
+          )}
+        </div>
+        <button className="button open-btn" type="button" onClick={() => openProduct()}>
+          Открыть
+        </button>
+      </li>
+    );
+  }
+
   return (
     <li className="result-card">
       <div className="result-card-top">
         <span className="badge">{product.marketplace}</span>
-        <a className="result-title" href={product.url} onClick={openProduct}>
+        <a className="result-title" href={product.url} onClick={(event) => openProduct(event)}>
           {product.title}
         </a>
       </div>
@@ -58,6 +99,11 @@ function ProductCard({ product }: { product: Product }) {
         <span className="result-price">
           {product.price === null ? "—" : priceFormat.format(product.price)} {product.currency}
         </span>
+        {isDiscount && product.old_price != null && (
+          <span className="old-price">
+            {priceFormat.format(product.old_price)} {product.currency}
+          </span>
+        )}
         {product.rating != null && <span className="muted">★ {product.rating}</span>}
         <span className="muted">
           регион: {product.region} · {new Date(product.parsed_at).toLocaleString("ru-RU")}
@@ -257,6 +303,22 @@ export default function SearchPage() {
         <div className="card-header">
           <h3>Результаты</h3>
           {status === "success" && <span className="muted">найдено: {priceFiltered.length}</span>}
+          <div className="view-toggle">
+            <button
+              className={search.viewMode === "grid" ? "button page-active" : "button"}
+              type="button"
+              onClick={() => search.setViewMode("grid")}
+            >
+              Сетка
+            </button>
+            <button
+              className={search.viewMode === "list" ? "button page-active" : "button"}
+              type="button"
+              onClick={() => search.setViewMode("list")}
+            >
+              Список
+            </button>
+          </div>
         </div>
 
         {Object.keys(errors).length > 0 && (
@@ -285,7 +347,7 @@ export default function SearchPage() {
 
         {status === "success" && priceFiltered.length > 0 && (
           <>
-            <ul className="result-list">
+            <ul className={search.viewMode === "grid" ? "result-grid" : "result-list"}>
               {visibleProducts.map((product) => (
                 <ProductCard key={`${product.marketplace}-${product.url}`} product={product} />
               ))}
@@ -338,6 +400,9 @@ export default function SearchPage() {
                 >
                   Загрузить ещё {search.itemsPerPage} товаров
                 </button>
+              )}
+              {!hasMore && allProducts.length > 0 && (
+                <p className="muted">Это все товары.</p>
               )}
               <p className="muted">
                 Найдено {priceFiltered.length} товаров

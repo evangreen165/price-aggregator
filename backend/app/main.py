@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import socket
+import sys
 import threading
 import time
 import urllib.error
@@ -253,24 +255,37 @@ class DesktopApi:
 def run_desktop() -> None:
     """Start uvicorn in a background thread, then open the native window."""
     _configure_logging()
+    # pywebview's accessibility event formatting recurses deeply in some
+    # WebView2/Windows environments; give it room so it completes instead of
+    # raising RecursionError in the GUI thread.
+    sys.setrecursionlimit(10000)
+    logger.info("Starting desktop app (%s frozen=%s)...", APP_NAME, IS_FROZEN)
 
     if _port_in_use(HOST, PORT):
         logger.error("Port %s:%s is already in use; close the other instance.", HOST, PORT)
         return
+    logger.info("Port %s:%s is free", HOST, PORT)
 
     config = uvicorn.Config(app, host=HOST, port=PORT, log_level="info", log_config=None)
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, name="uvicorn", daemon=True)
     thread.start()
+    logger.info("Uvicorn thread started (daemon=True)")
 
     url = f"http://{HOST}:{PORT}"
     if not _wait_for_health(f"{url}/api/health"):
         logger.error("Backend did not become healthy at %s; aborting.", url)
         server.should_exit = True
         return
+    logger.info("Backend is healthy at %s", url)
 
     import webview
 
+    # Prevent the known WebView2 accessibility recursion that crashes pywebview
+    # under load (maximum recursion depth exceeded in AccessibilityObject polling).
+    os.environ.setdefault(
+        "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-renderer-accessibility"
+    )
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = False
 
     api = DesktopApi()
@@ -283,7 +298,9 @@ def run_desktop() -> None:
         js_api=api,
     )
     api.window = window
+    logger.info("WebView window created, starting GUI loop")
     webview.start()
+    logger.info("GUI loop exited")
 
 
 if __name__ == "__main__":

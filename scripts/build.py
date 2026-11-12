@@ -69,8 +69,6 @@ def build_executable() -> Path:
         "webview",
         "--collect-all",
         "uvicorn",
-        "--collect-all",
-        "playwright",
         "--add-data",
         f"{FRONTEND / 'dist'}{sep}frontend/dist",
         "--add-data",

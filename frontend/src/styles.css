@@ -536,6 +536,78 @@ p {
   padding: 2px 0;
 }
 
+.view-toggle {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.view-toggle .button {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-grid-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.15s ease;
+}
+
+.product-grid-card:hover {
+  border-color: var(--accent);
+}
+
+.product-grid-card .badge {
+  align-self: flex-start;
+}
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.placeholder-thumb {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 42px;
+  font-weight: 700;
+}
+
+.grid-prices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.old-price {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-decoration: line-through;
+}
+
+.open-btn {
+  align-self: stretch;
+  text-align: center;
+}
+
 .error-banners {
   display: flex;
   flex-direction: column;

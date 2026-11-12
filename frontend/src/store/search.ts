@@ -8,6 +8,8 @@ export type LinkOpenMode = "system" | "new_window" | "current_window";
 
 export type SortMode = "default" | "price_asc" | "price_desc" | "rating_desc";
 
+export type ViewMode = "list" | "grid";
+
 type SearchStore = {
   query: string;
   marketplaces: string[];
@@ -26,6 +28,7 @@ type SearchStore = {
   maxPrice: number | null;
   sortBy: SortMode;
   discountOnly: boolean;
+  viewMode: ViewMode;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
   runSearch: (mode?: {
@@ -41,6 +44,7 @@ type SearchStore = {
   setPriceRange: (min: number | null, max: number | null) => void;
   setSortBy: (sortBy: SortMode) => void;
   setDiscountOnly: (enabled: boolean) => void;
+  setViewMode: (viewMode: ViewMode) => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -61,6 +65,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   maxPrice: null,
   sortBy: "default",
   discountOnly: false,
+  viewMode: "grid",
 
   setQuery: (query) => set({ query }),
 
@@ -155,4 +160,6 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setSortBy: (sortBy) => set({ sortBy, currentPage: 1 }),
 
   setDiscountOnly: (discountOnly) => set({ discountOnly, currentPage: 1 }),
+
+  setViewMode: (viewMode) => set({ viewMode }),
 }));

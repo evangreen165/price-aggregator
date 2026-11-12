@@ -137,24 +137,6 @@ def test_kufar_search_applies_filters() -> None:
     assert "Samsung" in products[0].title
 
 
-def test_kufar_search_caps_items() -> None:
-    many = [
-        {
-            "subject": f"Товар {index}",
-            "ad_link": f"https://www.kufar.by/item/{index}",
-            "price_byn": 10000 + index,
-            "ad_parameters": [],
-        }
-        for index in range(3, 500)
-    ]
-    handler = _kufar_handler(KUFAR_HTML, {2: many[:2], 3: many[2:]})
-    parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-    parser.max_items = 3
-    products = asyncio.run(parser.search("монитор", "belarus", limit_pages=2))
-    assert len(products) == 4
-    assert parser._truncated is True
-
-
 def _onliner_handler(items_by_page: dict[int, list[dict]]):
     def handler(request: httpx.Request) -> httpx.Response:
         page = int(request.url.params.get("page", "1"))
@@ -208,15 +190,6 @@ def test_onliner_search_marks_truncated_at_limit() -> None:
     handler = _onliner_handler({1: ONLINER_ITEMS, 2: [third]})
     parser = OnlinerParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     asyncio.run(parser.search("монитор", "belarus", limit_pages=2))
-    assert parser._truncated is True
-
-
-def test_onliner_search_caps_items() -> None:
-    handler = _onliner_handler({1: ONLINER_ITEMS, 2: ONLINER_ITEMS[:1], 3: ONLINER_ITEMS})
-    parser = OnlinerParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
-    parser.max_items = 2
-    products = asyncio.run(parser.search("монитор", "belarus", limit_pages=3))
-    assert len(products) == 2
     assert parser._truncated is True
 
 

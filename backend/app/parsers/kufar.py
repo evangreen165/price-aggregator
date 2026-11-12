@@ -13,7 +13,6 @@ from app.parsers.base import BaseParser, Product
 SEARCH_URL = "https://www.kufar.by/l"
 RENDERED_API_URL = "https://api.kufar.by/search-api/v2/search/rendered"
 PAGE_SIZE = 50
-MAX_ITEMS = 5000
 
 
 def _price_from_kopecks(value: object) -> float | None:
@@ -26,8 +25,7 @@ def _price_from_kopecks(value: object) -> float | None:
 class KufarParser(BaseParser):
     marketplace_id = "kufar"
     name = "Kufar"
-    version = "0.8.0"
-    max_items = MAX_ITEMS
+    version = "0.9.0"
 
     async def search(
         self,
@@ -86,9 +84,6 @@ class KufarParser(BaseParser):
                     break
                 if page == page_start + limit_pages - 1:
                     self._truncated = True
-                if len(products) >= self.max_items:
-                    self._truncated = True
-                    break
 
         if self._truncated and pit:
             self._next_cursor = self._make_token(pit, page_start + limit_pages)
@@ -147,10 +142,18 @@ class KufarParser(BaseParser):
                     marketplace=self.marketplace_id,
                     region=self._region_of(ad) or region,
                     parsed_at=now,
+                    image=self._image_of(ad),
                 )
             )
             added += 1
         return added > 0
+
+    @staticmethod
+    def _image_of(ad: dict) -> str | None:
+        images = ad.get("images") or []
+        if not images or not images[0].get("path"):
+            return None
+        return f"https://rms.kufar.by/v1/list_thumbs_2x/{images[0]['path']}"
 
     @staticmethod
     def _region_of(ad: dict) -> str | None:
