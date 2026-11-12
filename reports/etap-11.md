@@ -61,7 +61,9 @@
       альтернативы нет → best-effort.
 - [x] `test_21vek_xhr.py` возвращает реальные товары (через `?term=` + SSR JSON) — **работает**.
 - [x] Поиск в приложении работает на Kufar, Onliner и **21vek.by** (новая площадка).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43274386212](https://github.com/evangreen165/price-aggregator/actions/runs/43274386212),
+      `conclusion: success` (backend: ruff + 45 тестов, frontend: typecheck + build).
 
 ## Замечания
 
