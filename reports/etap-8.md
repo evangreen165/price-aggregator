@@ -72,7 +72,9 @@ page_start=4: onliner +300, kufar +150
 - [x] Динамические фильтры Kufar/Onliner (реальные с сайтов) — работает (см. отчёт этапа 7).
 - [x] Клиентская фильтрация по цене (min/max) без перезагрузки страницы.
 - [x] Кнопка «Загрузить ещё» добавляет товары к существующему списку (`page_start`-продолжение).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43264640537](https://github.com/evangreen165/price-aggregator/actions/runs/43264640537),
+      `conclusion: success` (backend: ruff + 45 тестов, frontend: typecheck + build).
 
 ## Замечания
 
