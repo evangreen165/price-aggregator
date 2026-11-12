@@ -85,7 +85,9 @@ general -> general
 - [x] «планшет» → фильтры «Бренд», «Объем памяти», «Диагональ экрана» (отдаёт бэкенд, рендерит UI).
 - [ ] WB/Ozon возвращают реальные товары — реализовано, но live-проверка ограничена антиботом
       с текущего IP; на машине пользователя ожидается работа через прогрев сессии.
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43244135054](https://github.com/evangreen165/price-aggregator/actions/runs/43244135054),
+      `conclusion: success` (backend: ruff + 37 тестов, frontend: typecheck + build).
 
 ## Замечания
 
