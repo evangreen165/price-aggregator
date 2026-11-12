@@ -70,7 +70,9 @@ onliner filter groups: 14
       (флаки, 404 на поиске).
 - [ ] `test_21vek_api.py` возвращает реальные товары — не выполнено (XHR выдачи не найден).
 - [ ] Поиск в приложении на AliExpress/новой площадке — не подтверждено (работают Kufar/Onliner).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43271360350](https://github.com/evangreen165/price-aggregator/actions/runs/43271360350),
+      `conclusion: success` (backend: ruff + 45 тестов, frontend: typecheck + build).
 
 ## Замечания
 
