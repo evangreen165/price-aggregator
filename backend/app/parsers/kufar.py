@@ -1,7 +1,8 @@
-"""Kufar.by parser: paginated extraction from the embedded __NEXT_DATA__ JSON."""
+"""Kufar.by parser: deep pagination via generated cursor tokens."""
 
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime
 
@@ -24,9 +25,15 @@ def _price_from_kopecks(value: object) -> float | None:
 class KufarParser(BaseParser):
     marketplace_id = "kufar"
     name = "Kufar"
-    version = "0.3.0"
+    version = "0.4.0"
 
-    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
+    async def search(
+        self,
+        query: str,
+        region: str,
+        limit_pages: int = 10,
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[Product]:
         products: list[Product] = []
         seen: set[str] = set()
 
@@ -37,20 +44,20 @@ class KufarParser(BaseParser):
             if listing is None:
                 return products
 
-            tokens = {
-                entry["num"]: entry["token"]
-                for entry in listing.get("pagination", [])
-                if entry.get("token")
-            }
+            pit = self._search_id(listing.get("pagination", []))
             self._add_products(products, seen, listing.get("ads", []), region)
 
             for page in range(2, limit_pages + 1):
-                token = tokens.get(page)
-                if not token:
+                if pit is None:
                     break
                 api_response = await client.get(
                     RENDERED_API_URL,
-                    params={"query": query, "size": PAGE_SIZE, "lang": "ru", "cursor": token},
+                    params={
+                        "query": query,
+                        "size": PAGE_SIZE,
+                        "lang": "ru",
+                        "cursor": self._make_token(pit, page),
+                    },
                 )
                 if api_response.status_code != 200:
                     break
@@ -61,7 +68,7 @@ class KufarParser(BaseParser):
                 if not self._add_products(products, seen, ads, region):
                     break
 
-        return products
+        return self._apply_filters(products, filters)
 
     @staticmethod
     def _parse_listing(html: str) -> dict | None:
@@ -74,6 +81,25 @@ class KufarParser(BaseParser):
             return data["props"]["initialState"]["listing"]
         except (KeyError, TypeError, json.JSONDecodeError):
             return None
+
+    @staticmethod
+    def _search_id(pagination: list[dict]) -> str | None:
+        for entry in pagination:
+            token = entry.get("token")
+            if not token:
+                continue
+            try:
+                payload = json.loads(base64.b64decode(token))
+                return payload.get("pit")
+            except (ValueError, TypeError, json.JSONDecodeError):
+                continue
+        return None
+
+    @staticmethod
+    def _make_token(search_id: str, page: int) -> str:
+        payload = {"t": "abs", "f": True, "p": page, "pit": search_id}
+        raw = json.dumps(payload, separators=(",", ":"))
+        return base64.b64encode(raw.encode()).decode()
 
     def _add_products(
         self, products: list[Product], seen: set[str], ads: list[dict], region: str

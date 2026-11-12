@@ -10,6 +10,11 @@ APP_NAME = "Price Aggregator"
 HOST = "127.0.0.1"
 PORT = 8000
 
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
 IS_FROZEN = bool(getattr(sys, "frozen", False))
 
 _CONFIG_FILE = Path(__file__).resolve()

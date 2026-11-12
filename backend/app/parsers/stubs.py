@@ -10,7 +10,13 @@ class OzonParser(BaseParser):
     name = "Ozon"
     version = "0.0.1"
 
-    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
+    async def search(
+        self,
+        query: str,
+        region: str,
+        limit_pages: int = 10,
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[Product]:
         return []
 
 
@@ -19,5 +25,11 @@ class WbParser(BaseParser):
     name = "Wildberries"
     version = "0.0.1"
 
-    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
+    async def search(
+        self,
+        query: str,
+        region: str,
+        limit_pages: int = 10,
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[Product]:
         return []

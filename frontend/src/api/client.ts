@@ -30,6 +30,8 @@ export type SearchRequest = {
   query: string;
   marketplaces: string[];
   region: string;
+  limit_pages?: number;
+  filters?: Record<string, string[]>;
 };
 
 export type SearchResponse = {

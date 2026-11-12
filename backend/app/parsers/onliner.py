@@ -15,7 +15,13 @@ class OnlinerParser(BaseParser):
     name = "Onliner"
     version = "0.3.0"
 
-    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
+    async def search(
+        self,
+        query: str,
+        region: str,
+        limit_pages: int = 10,
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[Product]:
         products: list[Product] = []
         seen: set[str] = set()
 
@@ -32,7 +38,7 @@ class OnlinerParser(BaseParser):
                 if not added:
                     break
 
-        return products
+        return self._apply_filters(products, filters)
 
     def _add_products(
         self, products: list[Product], seen: set[str], items: list[dict], region: str

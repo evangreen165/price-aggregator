@@ -9,7 +9,13 @@ from app.parsers.base import BaseParser, Product
 class FakeKufarParser(BaseParser):
     marketplace_id = "kufar"
 
-    async def search(self, query: str, region: str) -> list[Product]:
+    async def search(
+        self,
+        query: str,
+        region: str,
+        limit_pages: int = 10,
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[Product]:
         return [
             Product(
                 title=f"fake {query}",
@@ -50,7 +56,13 @@ def test_search_endpoint_records_parser_errors(monkeypatch) -> None:
     class FailingParser(BaseParser):
         marketplace_id = "onliner"
 
-        async def search(self, query: str, region: str) -> list[Product]:
+        async def search(
+            self,
+            query: str,
+            region: str,
+            limit_pages: int = 10,
+            filters: dict[str, list[str]] | None = None,
+        ) -> list[Product]:
             raise RuntimeError("boom")
 
     def fake_get_parser(marketplace_id: str) -> BaseParser | None:
@@ -67,3 +79,40 @@ def test_search_endpoint_records_parser_errors(monkeypatch) -> None:
     body = response.json()
     assert body["results"]["onliner"] == []
     assert body["errors"]["onliner"] == "boom"
+
+
+def test_search_endpoint_passes_filters_and_limit(monkeypatch) -> None:
+    captured: dict = {}
+
+    class CaptureParser(BaseParser):
+        marketplace_id = "kufar"
+
+        async def search(
+            self,
+            query: str,
+            region: str,
+            limit_pages: int = 10,
+            filters: dict[str, list[str]] | None = None,
+        ) -> list[Product]:
+            captured["filters"] = filters
+            captured["limit_pages"] = limit_pages
+            return []
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return CaptureParser() if marketplace_id == "kufar" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/search",
+            json={
+                "query": "samsung",
+                "marketplaces": ["kufar"],
+                "region": "belarus",
+                "limit_pages": 5,
+                "filters": {"brand": ["Samsung"]},
+            },
+        )
+    assert response.status_code == 200
+    assert captured["filters"] == {"brand": ["Samsung"]}
+    assert captured["limit_pages"] == 5

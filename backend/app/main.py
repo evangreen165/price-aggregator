@@ -9,6 +9,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 from contextlib import asynccontextmanager
 
 import httpx
@@ -18,7 +19,15 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.core.config import APP_NAME, FRONTEND_DIST, HOST, IS_FROZEN, LOG_FILE, PORT
+from app.core.config import (
+    APP_NAME,
+    FRONTEND_DIST,
+    HOST,
+    IS_FROZEN,
+    LOG_FILE,
+    PORT,
+    USER_AGENT,
+)
 from app.parsers import get_parser
 from app.parsers.categories import classify, filters_for_query
 from app.plugins import get_manager
@@ -67,10 +76,7 @@ def filters(query: str = "") -> dict:
 
 
 _PROXY_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-    ),
+    "User-Agent": USER_AGENT,
     "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
 }
 _PROXY_BLOCKED_HEADERS = {
@@ -113,6 +119,8 @@ class SearchRequest(BaseModel):
     query: str
     marketplaces: list[str] = []
     region: str = "belarus"
+    limit_pages: int = 10
+    filters: dict[str, list[str]] = {}
 
 
 @app.post("/api/search")
@@ -125,7 +133,9 @@ async def search(req: SearchRequest) -> dict:
             continue
         results[marketplace_id] = []
         try:
-            products = await parser.search(req.query, req.region)
+            products = await parser.search(
+                req.query, req.region, req.limit_pages, req.filters
+            )
             results[marketplace_id] = [product.to_dict() for product in products]
         except Exception as exc:  # noqa: BLE001 - a failing marketplace must not break others
             logger.exception("Search failed for marketplace %s", marketplace_id)
@@ -175,6 +185,56 @@ def _wait_for_health(url: str, timeout: float = 15.0) -> bool:
     return False
 
 
+_BACK_BUTTON_JS = """
+(function () {
+  if (document.getElementById('pa-back-btn')) return;
+  var btn = document.createElement('button');
+  btn.id = 'pa-back-btn';
+  btn.textContent = '\\u2190 \\u041d\\u0430\\u0437\\u0430\\u0434';
+  btn.style.cssText =
+    'position:fixed;top:12px;left:12px;z-index:2147483647;padding:8px 14px;' +
+    'font-size:14px;font-family:Segoe UI,Arial,sans-serif;background:#4c8dff;' +
+    'color:#fff;border:none;border-radius:8px;cursor:pointer;' +
+    'box-shadow:0 2px 8px rgba(0,0,0,.35)';
+  btn.onclick = function () { history.back(); };
+  document.body.appendChild(btn);
+})();
+"""
+
+
+class DesktopApi:
+    """JavaScript bridge exposed to the webview UI."""
+
+    def __init__(self) -> None:
+        self.window = None
+
+    def open_link(self, url: str, mode: str) -> str:
+        """Open a product link according to the user-selected mode."""
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            return "invalid url"
+        try:
+            if mode == "system":
+                webbrowser.open(url)
+                return "opened in system browser"
+            if mode == "new_window":
+                import webview
+
+                webview.create_window("Товар", url, width=1100, height=750)
+                return "opened in new window"
+            if self.window is not None:
+                self.window.load_url(url)
+                self.window.events.loaded += lambda: self.window.evaluate_js(
+                    _BACK_BUTTON_JS
+                )
+                return "opened in current window"
+        except Exception as exc:  # noqa: BLE001 - fall back to the system browser
+            logger.exception("open_link failed for %s", url)
+            webbrowser.open(url)
+            return f"fallback to system browser: {exc}"
+        return "no window available"
+
+
 def run_desktop() -> None:
     """Start uvicorn in a background thread, then open the native window."""
     _configure_logging()
@@ -196,7 +256,18 @@ def run_desktop() -> None:
 
     import webview
 
-    webview.create_window(APP_NAME, url, width=1200, height=800, min_size=(900, 600))
+    webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = False
+
+    api = DesktopApi()
+    window = webview.create_window(
+        APP_NAME,
+        url,
+        width=1200,
+        height=800,
+        min_size=(900, 600),
+        js_api=api,
+    )
+    api.window = window
     webview.start()
 
 

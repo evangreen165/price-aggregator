@@ -60,5 +60,30 @@ class BaseParser(ABC):
             yield client
 
     @abstractmethod
-    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
+    async def search(
+        self,
+        query: str,
+        region: str,
+        limit_pages: int = 10,
+        filters: dict[str, list[str]] | None = None,
+    ) -> list[Product]:
         raise NotImplementedError
+
+    @staticmethod
+    def _apply_filters(
+        products: list[Product], filters: dict[str, list[str]] | None
+    ) -> list[Product]:
+        """Filter collected products by matching filter options against titles."""
+        if not filters:
+            return products
+        result = products
+        for options in filters.values():
+            if not options:
+                continue
+            lowered = [str(option).lower() for option in options]
+            result = [
+                product
+                for product in result
+                if any(option in product.title.lower() for option in lowered)
+            ]
+        return result

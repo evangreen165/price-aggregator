@@ -467,3 +467,23 @@ p {
   min-height: 70vh;
   border: 0;
 }
+
+.radio-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.radio {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.radio input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}

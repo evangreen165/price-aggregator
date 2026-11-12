@@ -4,6 +4,8 @@ import { FilterOption, Product, searchProducts } from "../api/client";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
 
+export type LinkOpenMode = "system" | "new_window" | "current_window";
+
 type SearchStore = {
   query: string;
   marketplaces: string[];
@@ -15,6 +17,7 @@ type SearchStore = {
   filtersCategory: string | null;
   filtersLoading: boolean;
   selectedFilters: Record<string, string[]>;
+  linkOpenMode: LinkOpenMode;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
   runSearch: () => Promise<void>;
@@ -22,6 +25,7 @@ type SearchStore = {
   setFiltersLoading: (loading: boolean) => void;
   toggleFilterOption: (key: string, option: string) => void;
   clearFilters: () => void;
+  setLinkOpenMode: (mode: LinkOpenMode) => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -35,6 +39,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   filtersCategory: null,
   filtersLoading: false,
   selectedFilters: {},
+  linkOpenMode: "current_window",
 
   setQuery: (query) => set({ query }),
 
@@ -46,13 +51,18 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     })),
 
   runSearch: async () => {
-    const { query, marketplaces } = get();
+    const { query, marketplaces, selectedFilters } = get();
+    const filters = Object.fromEntries(
+      Object.entries(selectedFilters).filter(([, options]) => options.length > 0),
+    );
     set({ status: "loading", requestError: null });
     try {
       const response = await searchProducts({
         query: query.trim(),
         marketplaces,
         region: "belarus",
+        limit_pages: 10,
+        filters,
       });
       set({ status: "success", results: response.results, errors: response.errors });
     } catch (error) {
@@ -79,4 +89,6 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     }),
 
   clearFilters: () => set({ selectedFilters: {} }),
+
+  setLinkOpenMode: (linkOpenMode) => set({ linkOpenMode }),
 }));

@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, type MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { getFilters, Product } from "../api/client";
 import { useSearchStore } from "../store/search";
@@ -17,13 +17,26 @@ const priceFormat = new Intl.NumberFormat("ru-RU", {
 });
 
 function ProductCard({ product }: { product: Product }) {
+  const linkOpenMode = useSearchStore((state) => state.linkOpenMode);
+  const navigate = useNavigate();
+
+  const openProduct = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    const api = window.pywebview?.api;
+    if (api?.open_link) {
+      api.open_link(product.url, linkOpenMode);
+    } else {
+      navigate(`/product?url=${encodeURIComponent(product.url)}`);
+    }
+  };
+
   return (
     <li className="result-card">
       <div className="result-card-top">
         <span className="badge">{product.marketplace}</span>
-        <Link className="result-title" to={`/product?url=${encodeURIComponent(product.url)}`}>
+        <a className="result-title" href={product.url} onClick={openProduct}>
           {product.title}
-        </Link>
+        </a>
       </div>
       <div className="result-meta">
         <span className="result-price">

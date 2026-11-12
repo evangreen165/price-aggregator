@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import json
 
 import httpx
 
@@ -6,6 +8,13 @@ from app.parsers import PARSERS, get_parser, list_parsers
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
 from app.parsers.stubs import OzonParser, WbParser
+
+
+def _kufar_token(search_id: str, page: int) -> str:
+    payload = {"t": "abs", "f": True, "p": page, "pit": search_id}
+    raw = json.dumps(payload, separators=(",", ":"))
+    return base64.b64encode(raw.encode()).decode()
+
 
 KUFAR_HTML = """
 <html><body><script id="__NEXT_DATA__" type="application/json">
@@ -18,12 +27,12 @@ KUFAR_HTML = """
   ],
   "pagination":[
     {"num":1,"token":null},
-    {"num":2,"token":"T2"},
-    {"num":3,"token":"T3"}
+    {"num":2,"token":"%s"},
+    {"num":3,"token":"%s"}
   ]
 }}}}
 </script></body></html>
-"""
+""" % (_kufar_token("PIT1", 2), _kufar_token("PIT1", 3))
 
 ONLINER_ITEMS = [
     {
@@ -54,12 +63,16 @@ def test_kufar_extracts_listing_ads() -> None:
     assert products[1].region == "belarus"
 
 
-def _kufar_handler(html: str, extra_pages: dict[str, list[dict]]):
+def _kufar_handler(html: str, extra_pages: dict[int, list[dict]]):
     def handler(request: httpx.Request) -> httpx.Response:
         if "search-api" in str(request.url):
             cursor = request.url.params.get("cursor")
-            ads = extra_pages.get(cursor, [])
-            return httpx.Response(200, json={"ads": ads})
+            page = None
+            try:
+                page = json.loads(base64.b64decode(cursor)).get("p")
+            except (ValueError, TypeError, json.JSONDecodeError):
+                page = None
+            return httpx.Response(200, json={"ads": extra_pages.get(page, [])})
         return httpx.Response(200, text=html)
 
     return handler
@@ -72,7 +85,7 @@ def test_kufar_search_collects_pages_and_dedupes() -> None:
         "price_byn": 89900,
         "ad_parameters": [],
     }
-    handler = _kufar_handler(KUFAR_HTML, {"T2": [ad_c, ad_c], "T3": []})
+    handler = _kufar_handler(KUFAR_HTML, {2: [ad_c, ad_c], 3: []})
     parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     products = asyncio.run(parser.search("монитор", "belarus", limit_pages=3))
     assert len(products) == 3
@@ -81,7 +94,7 @@ def test_kufar_search_collects_pages_and_dedupes() -> None:
 
 
 def test_kufar_search_stops_when_no_new_items() -> None:
-    handler = _kufar_handler(KUFAR_HTML, {"T2": [], "T3": []})
+    handler = _kufar_handler(KUFAR_HTML, {2: [], 3: []})
     parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     products = asyncio.run(parser.search("монитор", "belarus", limit_pages=3))
     assert len(products) == 2
@@ -92,6 +105,28 @@ def test_kufar_search_respects_limit_pages() -> None:
     parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
     products = asyncio.run(parser.search("монитор", "belarus", limit_pages=1))
     assert len(products) == 2
+
+
+def test_kufar_search_applies_filters() -> None:
+    ad_samsung = {
+        "subject": "Телевизор Samsung 55",
+        "ad_link": "https://www.kufar.by/item/9",
+        "price_byn": 199900,
+        "ad_parameters": [],
+    }
+    ad_lg = {
+        "subject": "Телевизор LG 43",
+        "ad_link": "https://www.kufar.by/item/10",
+        "price_byn": 149900,
+        "ad_parameters": [],
+    }
+    handler = _kufar_handler(KUFAR_HTML, {2: [ad_samsung, ad_lg]})
+    parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    products = asyncio.run(
+        parser.search("телевизор", "belarus", limit_pages=2, filters={"brand": ["Samsung"]})
+    )
+    assert len(products) == 1
+    assert "Samsung" in products[0].title
 
 
 def test_onliner_extracts_items() -> None:
@@ -123,6 +158,16 @@ def test_onliner_search_collects_pages() -> None:
     products = asyncio.run(parser.search("монитор", "belarus", limit_pages=3))
     assert len(products) == 3
     assert products[2].title == "LG UltraGear 27"
+
+
+def test_onliner_search_applies_filters() -> None:
+    handler = _onliner_handler({1: ONLINER_ITEMS})
+    parser = OnlinerParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    products = asyncio.run(
+        parser.search("монитор", "belarus", limit_pages=2, filters={"brand": ["Samsung"]})
+    )
+    assert len(products) == 1
+    assert "Samsung" in products[0].title
 
 
 def test_onliner_search_stops_on_empty_page() -> None:
