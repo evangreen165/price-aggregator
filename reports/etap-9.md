@@ -75,7 +75,9 @@
       (captcha), 21vek/Deal.by/shop.by (JS-рендер, API-эндпоинты не найдены), 1k.by/tomas.by (404).
       Работают живьём Kufar и Onliner.
 - [ ] Поиск в приложении на новой площадке — см. выше (Kufar/Onliner работают).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43268433665](https://github.com/evangreen165/price-aggregator/actions/runs/43268433665),
+      `conclusion: success` (backend: ruff + 45 тестов, frontend: typecheck + build).
 
 ## Замечания
 
