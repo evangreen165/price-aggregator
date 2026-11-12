@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from "react-router-dom";
 
 import PluginsPage from "./pages/PluginsPage";
+import ProductPage from "./pages/ProductPage";
 import ResultsPage from "./pages/ResultsPage";
 import SearchPage from "./pages/SearchPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -45,6 +46,7 @@ export default function App() {
         <main className="content">
           <Routes>
             <Route path="/" element={<SearchPage />} />
+            <Route path="/product" element={<ProductPage />} />
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/plugins" element={<PluginsPage />} />
             <Route path="/settings" element={<SettingsPage />} />

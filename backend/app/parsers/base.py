@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import ClassVar
@@ -45,16 +47,18 @@ class BaseParser(ABC):
     version: ClassVar[str] = "0.1.0"
 
     def __init__(self, client: httpx.AsyncClient | None = None) -> None:
-        self._client = client
+        self._injected_client = client
 
-    async def _get(self, url: str, **kwargs) -> httpx.Response:
-        if self._client is not None:
-            return await self._client.get(url, **kwargs)
+    @asynccontextmanager
+    async def _client(self) -> AsyncIterator[httpx.AsyncClient]:
+        if self._injected_client is not None:
+            yield self._injected_client
+            return
         async with httpx.AsyncClient(
             headers=DEFAULT_HEADERS, follow_redirects=True, timeout=DEFAULT_TIMEOUT
         ) as client:
-            return await client.get(url, **kwargs)
+            yield client
 
     @abstractmethod
-    async def search(self, query: str, region: str) -> list[Product]:
+    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
         raise NotImplementedError

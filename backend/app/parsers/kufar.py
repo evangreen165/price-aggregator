@@ -1,4 +1,4 @@
-"""Kufar.by parser: extracts product data from the embedded __NEXT_DATA__ JSON."""
+"""Kufar.by parser: paginated extraction from the embedded __NEXT_DATA__ JSON."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from bs4 import BeautifulSoup
 from app.parsers.base import BaseParser, Product
 
 SEARCH_URL = "https://www.kufar.by/l"
+RENDERED_API_URL = "https://api.kufar.by/search-api/v2/search/rendered"
+PAGE_SIZE = 50
 
 
 def _price_from_kopecks(value: object) -> float | None:
@@ -22,32 +24,69 @@ def _price_from_kopecks(value: object) -> float | None:
 class KufarParser(BaseParser):
     marketplace_id = "kufar"
     name = "Kufar"
-    version = "0.2.0"
+    version = "0.3.0"
 
-    async def search(self, query: str, region: str) -> list[Product]:
-        response = await self._get(SEARCH_URL, params={"query": query})
-        response.raise_for_status()
-        return self._extract(response.text, region)
+    async def search(self, query: str, region: str, limit_pages: int = 3) -> list[Product]:
+        products: list[Product] = []
+        seen: set[str] = set()
 
-    def _extract(self, html: str, region: str) -> list[Product]:
+        async with self._client() as client:
+            response = await client.get(SEARCH_URL, params={"query": query})
+            response.raise_for_status()
+            listing = self._parse_listing(response.text)
+            if listing is None:
+                return products
+
+            tokens = {
+                entry["num"]: entry["token"]
+                for entry in listing.get("pagination", [])
+                if entry.get("token")
+            }
+            self._add_products(products, seen, listing.get("ads", []), region)
+
+            for page in range(2, limit_pages + 1):
+                token = tokens.get(page)
+                if not token:
+                    break
+                api_response = await client.get(
+                    RENDERED_API_URL,
+                    params={"query": query, "size": PAGE_SIZE, "lang": "ru", "cursor": token},
+                )
+                if api_response.status_code != 200:
+                    break
+                try:
+                    ads = api_response.json().get("ads", [])
+                except ValueError:
+                    break
+                if not self._add_products(products, seen, ads, region):
+                    break
+
+        return products
+
+    @staticmethod
+    def _parse_listing(html: str) -> dict | None:
         soup = BeautifulSoup(html, "html.parser")
         node = soup.find("script", id="__NEXT_DATA__")
         if node is None or not node.string:
-            return []
+            return None
         try:
             data = json.loads(node.string)
-            ads = data["props"]["initialState"]["listing"]["ads"]
+            return data["props"]["initialState"]["listing"]
         except (KeyError, TypeError, json.JSONDecodeError):
-            return []
+            return None
 
+    def _add_products(
+        self, products: list[Product], seen: set[str], ads: list[dict], region: str
+    ) -> bool:
         now = datetime.now()
-        products: list[Product] = []
+        added = 0
         for ad in ads:
             title = str(ad.get("subject", "")).strip()
             url = ad.get("ad_link")
             price = _price_from_kopecks(ad.get("price_byn"))
-            if not title or not url or price is None:
+            if not title or not url or price is None or url in seen:
                 continue
+            seen.add(url)
             products.append(
                 Product(
                     title=title,
@@ -60,7 +99,8 @@ class KufarParser(BaseParser):
                     parsed_at=now,
                 )
             )
-        return products
+            added += 1
+        return added > 0
 
     @staticmethod
     def _region_of(ad: dict) -> str | None:

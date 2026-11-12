@@ -21,6 +21,7 @@ type SearchStore = {
   setFilters: (category: string | null, filters: FilterOption[]) => void;
   setFiltersLoading: (loading: boolean) => void;
   toggleFilterOption: (key: string, option: string) => void;
+  clearFilters: () => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -76,4 +77,6 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         : [...current, option];
       return { selectedFilters: { ...state.selectedFilters, [key]: next } };
     }),
+
+  clearFilters: () => set({ selectedFilters: {} }),
 }));

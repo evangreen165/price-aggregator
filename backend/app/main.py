@@ -7,12 +7,14 @@ import socket
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from contextlib import asynccontextmanager
 
+import httpx
 import uvicorn
 from fastapi import FastAPI
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -55,7 +57,45 @@ def health() -> dict[str, str]:
 
 @app.get("/api/filters")
 def filters(query: str = "") -> dict:
-    return {"query": query, "category": classify(query), "filters": filters_for_query(query)}
+    categories = classify(query)
+    return {
+        "query": query,
+        "category": categories[0],
+        "categories": categories,
+        "filters": filters_for_query(query),
+    }
+
+
+_PROXY_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
+    ),
+    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+}
+_PROXY_BLOCKED_HEADERS = {
+    "content-length",
+    "content-encoding",
+    "transfer-encoding",
+    "x-frame-options",
+    "content-security-policy",
+}
+
+
+@app.get("/proxy")
+async def proxy(url: str = "") -> Response:
+    """Fetch a page server-side so external sites can be embedded in the app iframe."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return JSONResponse({"detail": "invalid url"}, status_code=400)
+    async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
+        upstream = await client.get(url, headers=_PROXY_HEADERS)
+    headers = {
+        key: value
+        for key, value in upstream.headers.items()
+        if key.lower() not in _PROXY_BLOCKED_HEADERS
+    }
+    return Response(content=upstream.content, status_code=upstream.status_code, headers=headers)
 
 
 @app.get("/api/plugins")

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Link } from "react-router-dom";
 
 import { getFilters, Product } from "../api/client";
 import { useSearchStore } from "../store/search";
@@ -20,14 +21,9 @@ function ProductCard({ product }: { product: Product }) {
     <li className="result-card">
       <div className="result-card-top">
         <span className="badge">{product.marketplace}</span>
-        <a
-          className="result-title"
-          href={product.url}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <Link className="result-title" to={`/product?url=${encodeURIComponent(product.url)}`}>
           {product.title}
-        </a>
+        </Link>
       </div>
       <div className="result-meta">
         <span className="result-price">
@@ -119,13 +115,27 @@ export default function SearchPage() {
         {search.filtersLoading && <p className="muted">Подбираем фильтры…</p>}
         {!search.filtersLoading && search.filters.length > 0 && (
           <div className="filters-box">
+            <div className="filters-box-head">
+              <span className="muted">Фильтры</span>
+              <button
+                className="button link-button"
+                type="button"
+                onClick={() => search.clearFilters()}
+                disabled={Object.keys(search.selectedFilters).length === 0}
+              >
+                Очистить все
+              </button>
+            </div>
             {search.filters.map((group) => (
               <fieldset className="filter-group" key={group.key}>
                 <legend>{group.label}</legend>
                 {group.options.map((option) => {
                   const checked = search.selectedFilters[group.key]?.includes(option) ?? false;
                   return (
-                    <label className="checkbox" key={option}>
+                    <label
+                      className={checked ? "checkbox selected" : "checkbox"}
+                      key={option}
+                    >
                       <input
                         type="checkbox"
                         checked={checked}
