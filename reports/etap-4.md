@@ -95,7 +95,9 @@ Exe запускается с `js_api`, `OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, 
 - [x] Onliner открывается в окне приложения (top-level загрузка, как в обычном браузере).
 - [x] В «Настройках» есть выбор способа открытия ссылок, выбор хранится в Zustand и
       передаётся в `open_link`.
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43240460899](https://github.com/evangreen165/price-aggregator/actions/runs/43240460899),
+      `conclusion: success` (backend: ruff + 29 тестов, frontend: typecheck + build).
 
 ## Замечания
 
