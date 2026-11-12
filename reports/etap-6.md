@@ -1,95 +1,93 @@
-# Этап 6 — глубокий парсинг, Playwright-фолбэк для Ozon/WB, динамические фильтры
+# Этап 6 — исследование обхода Ozon/WB и динамических фильтров
 
 Дата: 2026-11-12
 Ветка: `main`
 
-## ЗАДАЧА 1 — обход лимитов парсинга
+## Методология (research-first)
 
-- Onliner: цикл `limit=100&page=1..limit_pages`; глубокая пагинация через чекбокс в UI
-  (`limit_pages=50`). Проверено: «телевизор» → 999 уникальных товаров, `truncated=False` —
-  собраны **все страницы**, которые отдаёт API (выдача капается самим API на ~1000 позиций).
-- Kufar: cursor-токены генерируются для любой страницы; добавлен лимит **`max_items=2000`**
-  (остановка при достижении, `_truncated=True`). Проверено: «телевизор» → 993 объявления
-  (все доступные), `truncated=False`.
-- Wildberries: цикл `page=1..limit_pages` (по умолчанию ~100/страница).
-- Frontend: чекбокс «Глубокая пагинация (медленнее, до 50 страниц)» в Zustand-сторе —
-  `limit_pages=50` вместо 10 в `POST /api/search`.
+Правило этапа: **не трогать код приложения, пока не найден рабочий способ обхода**. Поэтому
+сначала были созданы изолированные скрипты `research/` и прогнаны на реальном сайте:
 
-## ЗАДАЧА 2 — реальные парсеры Ozon и Wildberries
+- `research/test_ozon.py` — Playwright (sync, `channel="msedge"`, headful), прогрев главной
+  страницы (10 с на прохождение антибота), переход на `/search/?text=телевизор`, скролл,
+  извлечение `window.__NUXT__` и DOM-ссылок `a[href*='/product/']`, перехват `composer-api`,
+  сохранение `storage_state`.
+- `research/test_wb.py` — Playwright + `playwright-stealth` (`Stealth().use_sync(page)`), переход
+  на `search.aspx?search=телевизор`, перехват `search.wb.ru`, проверка `__NEXT_DATA__` и DOM.
+- `research/test_filters.py` — Onliner: поиск фильтров в server-side HTML страниц
+  (`/search`, категория `/tv`, root-каталог); Ozon/WB: попытка извлечения фильтров через браузер.
 
-- Добавлен **Playwright** (`playwright>=1.45`), в `scripts/build.py` — `--collect-all playwright`.
-  Браузерные бинарники **не** бандлим: `BaseParser.launch_chromium` запускает установленный
-  Chrome/Edge (`channel="chrome"` → `"msedge"` → headless Chromium). Для headless-режима на
-  машине пользователя нужен `playwright install chromium`.
-- **Wildberries**: сначала curl_cffi (`search.wb.ru`, `impersonate="chrome"`, прогрев cookie);
-  при 403/пустом ответе — Playwright: `wildberries.ru/catalog/0/search.aspx?search=...`,
-  перехват ответов `search.wb.ru` через `page.on("response")`, парсинг `name/salePriceU/id`.
-- **Ozon**: сначала curl_cffi (composer-api); при 403 — Playwright: `ozon.ru/search/?text=...`,
-  извлечение `window.__NUXT__` (или `__NEXT_DATA__`) через `page.evaluate`, парсинг товаров из
-  `widgetStates` (title/price/skuId).
-- С IP этой машины WB/Ozon отдают 403/498 на любом пути (включая антибот-эмуляцию), поэтому
-  live-проверка здесь невозможна: парсеры корректно возвращают пустой список без падения.
-  Логика фолбэка и извлечения покрыта моками в тестах. На машине пользователя (реальный браузер,
-  прогретые cookie) ожидается получение данных.
+## Результаты исследований (логи скриптов)
 
-## ЗАДАЧА 3 — динамические фильтры
-
-- **Kufar** (проверено на живом сайте): `GET /api/filters?query=...&marketplace=kufar`
-  извлекает из `__NEXT_DATA__` (`initialState.filters.currentFilters`) реальные фильтры:
-  категория (22 значения), бренд, регион и т.д. — возвращается 15 групп фильтров.
-- **Onliner**: поисковая выдача не отдаёт server-side facets (`facets:{general:[],additional:[]}`)
-  — при недоступности динамических фильтров `/api/filters` отдаёт статический классификатор
-  (для «планшет» — Бренд, Объем памяти, Диагональ экрана).
-- **Ozon/WB**: Playwright-фолбэк умеет кликать/применять фильтры в UI; извлечение фильтров из
-  страницы — best-effort (покрыто моками).
-- Frontend: при выборе **ровно одного** маркетплейса запрос фильтров идёт с `marketplace=...`
-  (для Kufar — динамические); выбранные фильтры по-прежнему передаются в `POST /api/search` и
-  применяются через `_apply_filters`.
-
-## Проверки
-
-### `ruff check .` — `All checks passed!`
-
-### `pytest -q` (из `backend/`)
+### Ozon — `research/test_ozon.py`
 
 ```
-...........................................                                                      [100%]
-43 passed, 1 warning in 0.85s
+[ozon] home title: Онлайн-гипермаркет Ozon
+[ozon] __NUXT__ present: False
+[ozon] DOM product links: 0
+[ozon] body snippet: Онлайн-гипермаркет | Проверьте VPN, убедитесь ... |
+        Ошибка: fab_chlg_20261112153713_01M786FT4DYR0E2RNDZC3BQ4MW
 ```
 
-Новые тесты: Kufar `fetch_filters` (мок NEXT_DATA), лимит `max_items` Kufar, фолбэк WB/Ozon на
-Playwright (monkeypatch `_browser_search`/`_browser_search_data` при 403), динамические фильтры
-`/api/filters?marketplace=kufar` (успех и фолбэк на статику при ошибке).
+Вывод: Ozon (Variti) блокирует IP **на сетевом уровне** — показывается challenge
+«Проверьте VPN» с идентификатором `fab_chlg_...`. Реальный браузер (headful msedge) не помогает:
+до страницы поиска данные не доезжают, `composer-api` не вызывается (0 перехватов), товаров в DOM
+нет (0 ссылок).
 
-### `npm run typecheck` / `npm run build` — успешно (89 модулей).
-
-### Smoke-тест (dev-сервер и собранный `.exe`)
+### Wildberries — `research/test_wb.py`
 
 ```
-kufar dynamic filters: 15 (Категория 22 опции, Бренд 7, ...)
-deep телевизор onliner: 999 items, truncated=False   (все, что отдаёт API)
-deep телевизор kufar:   993 items, truncated=False
+[wb] body snippet: Доступ ограничен. Обратитесь, пожалуйста. | ID: 81a8278addeb36b05be09cc7d9cec89e |
+        IP: 37.212.49.45 | Время блокировки ...
+[wb] __NEXT_DATA__ present: False
+[wb] search.wb.ru responses: 0
+[wb] DOM catalog links: 0
 ```
 
-`.exe` собран с `--collect-all playwright`, запускается, API работает. При закрытии окна
-pywebview/WebView2 пишет рекурсивный shutdown-шум в лог — известный артефакт закрытия, на работу
-не влияет.
+Вывод: WB блокирует IP (страница «Доступ ограничен», указан наш IP `37.212.49.45`). `playwright-stealth`
+и перехват XHR не помогают — антибот решает по IP/репутации соединения.
+
+### Onliner — `research/test_filters.py`
+
+```
+/tablet: 404 · /monitor: 404 · /tv: 200
+facet-name: 0 · f[...]: 0 · catalog-filter: 0
+```
+
+Вывод: даже категорийная страница `/tv` (200) не содержит server-side разметки фильтров —
+фасеты отрисовываются клиентом через JS (`catalog-form__filter`), отдельного доступного API
+фасетов не найдено. Статический классификатор остаётся основным источником фильтров.
+
+## Вывод и рекомендация
+
+- **Ozon и WB** блокируют именно IP `37.212.49.45`, а не User-Agent/TLS: ни curl_cffi, ни
+  headful-браузер, ни stealth не проходят. Для рабочего обхода необходим **прокси/резидентный
+  IP** (например, прокси-пул), либо запуск на машине пользователя с «чистым» домашним IP —
+  там прогрев браузера и сохранённый `storage_state` (cookies) дают реальные данные.
+- В приложении уже реализован путь `curl_cffi → Playwright-фолбэк` (без правок в этом этапе —
+  по правилу research-first); при работающем на стороне пользователя обходе он вернёт товары.
+  Для WB в фолбэк добавлен `playwright-stealth` (объявлен в `pyproject.toml`).
+- Kufar/Onliner работают и проверены на живых данных (см. предыдущий отчёт этапа 6): глубокая
+  пагинация (999/993 товара), динамические фильтры Kufar из `currentFilters`.
+
+## Файлы этапа
+
+- `research/test_ozon.py`, `research/test_wb.py`, `research/test_filters.py` — скрипты с логами.
+- `backend/pyproject.toml` — объявлен `playwright-stealth`.
 
 ## Чек-лист приёмки
 
-- [x] «телевизор» Onliner: >1000 (999 уникальных — API капит выдачу на ~1000; собрано всё).
-- [ ] Ozon/WB возвращают реальные товары — реализовано (curl → Playwright-фолбэк), live-проверка
-      невозможна с текущего IP (антибот 403/498); ожидается на машине пользователя.
-- [x] «планшет» → Бренд, Объем памяти, Диагональ экрана (статический классификатор) + Kufar
-      отдаёт свои реальные фильтры при `marketplace=kufar`.
-- [x] Выбранные фильтры передаются в `/api/search` и уменьшают выдачу (`_apply_filters`).
-- [x] CI на GitHub зеленый — run
-      [#43248072376](https://github.com/evangreen165/price-aggregator/actions/runs/43248072376),
-      `conclusion: success` (backend: ruff + 43 теста, frontend: typecheck + build).
+- [ ] Скрипты `research/` выводят реальные товары Ozon/WB — **не выполнено**: IP `37.212.49.45`
+      заблокирован обоими сайтами (Variti/«Доступ ограничен»); требуется прокси или другой IP.
+- [ ] Скрипт фильтров выводит бренды для «планшет» — частично: Onliner не отдаёт server-side
+      фасеты; для «планшет» работают фильтры статического классификатора + динамические Kufar.
+- [ ] Поиск Ozon/WB в `.exe` возвращает товары — ожидается на машине пользователя (резидентный IP).
+- [ ] Динамические фильтры в UI — Kufar работает; Ozon/WB заблокированы на текущем IP.
+- [ ] CI на GitHub зеленый — проверяется после push.
 
-## Замечания
+## Рекомендуемые следующие шаги
 
-- Onliner API ограничивает выдачу поиска на ~1000 позиций независимо от числа страниц —
-  «до 5000» недостижимо через `sdapi/search`; собирается всё, что отдаёт API.
-- Playwright-браузеры не включаются в `.exe` (используется системный Chrome/Edge); для
-  standalone-headless нужен `playwright install chromium`.
+1. Подключить прокси-пул (SOCKS/HTTP) для Ozon/WB и повторить `research/test_ozon.py`,
+   `research/test_wb.py`; после успеха перенести cookies/параметры в `backend/app/parsers/`.
+2. Либо собрать `.exe` и запустить на машине пользователя (домашний IP) — прогрев главной
+   страницы с сохранением `storage_state` даст доступ к composer-api / search.wb.ru.

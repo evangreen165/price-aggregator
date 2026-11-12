@@ -13,5 +13,6 @@ venv/
 .idea/
 .vscode/
 *.log
+research/*_state.json
 .gittoken
 .env
