@@ -2,14 +2,13 @@ import { useEffect, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { getFilters, Product } from "../api/client";
-import { useSearchStore } from "../store/search";
+import { SortMode, useSearchStore } from "../store/search";
 
 const MARKETPLACES = [
   { id: "kufar", label: "Kufar" },
   { id: "onliner", label: "Onliner" },
-  { id: "aliexpress", label: "AliExpress" },
+  { id: "aliexpress", label: "AliExpress (нестабильно)" },
   { id: "21vek", label: "21vek.by" },
-  { id: "dealby", label: "Deal.by" },
 ];
 
 const priceFormat = new Intl.NumberFormat("ru-RU", {
@@ -100,7 +99,16 @@ export default function SearchPage() {
     products.map((product) => ({ ...product, marketplace })),
   );
 
-  const priceFiltered = allProducts.filter((product) => {
+  let priceFiltered = allProducts;
+  if (search.discountOnly) {
+    priceFiltered = priceFiltered.filter(
+      (product) =>
+        product.old_price !== null &&
+        product.old_price !== undefined &&
+        product.old_price > (product.price ?? 0),
+    );
+  }
+  priceFiltered = priceFiltered.filter((product) => {
     const price = product.price ?? 0;
     if (search.minPrice !== null && price < search.minPrice) {
       return false;
@@ -110,6 +118,21 @@ export default function SearchPage() {
     }
     return true;
   });
+  const sorted = [...priceFiltered];
+  if (search.sortBy === "price_asc") {
+    sorted.sort((a, b) => (a.price ?? Number.MAX_VALUE) - (b.price ?? Number.MAX_VALUE));
+  } else if (search.sortBy === "price_desc") {
+    sorted.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+  } else if (search.sortBy === "rating_desc") {
+    sorted.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+  }
+  priceFiltered = sorted;
+
+  const prices = allProducts.map((product) => product.price ?? 0).filter((price) => price > 0);
+  const priceBoundsMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
+  const priceBoundsMax = prices.length ? Math.ceil(Math.max(...prices)) : 1000;
+  const sliderMin = search.minPrice ?? priceBoundsMin;
+  const sliderMax = search.maxPrice ?? priceBoundsMax;
 
   const totalPages =
     search.itemsPerPage > 0
@@ -240,40 +263,60 @@ export default function SearchPage() {
         </div>
 
         <div className="price-filter-row">
-          <label className="muted" htmlFor="min-price">
-            Цена от:
+          <div className="range-block">
+            <div className="range-labels">
+              <span className="muted">Цена:</span>
+              <span className="range-value">{sliderMin}</span>
+              <span className="muted">—</span>
+              <span className="range-value">{sliderMax}</span>
+              <span className="muted">{allProducts[0]?.currency ?? "BYN"}</span>
+            </div>
+            <input
+              className="range"
+              type="range"
+              min={priceBoundsMin}
+              max={priceBoundsMax}
+              value={sliderMin}
+              onChange={(event) =>
+                search.setPriceRange(
+                  Number(event.target.value),
+                  search.maxPrice ?? priceBoundsMax,
+                )
+              }
+            />
+            <input
+              className="range"
+              type="range"
+              min={priceBoundsMin}
+              max={priceBoundsMax}
+              value={sliderMax}
+              onChange={(event) =>
+                search.setPriceRange(
+                  search.minPrice ?? priceBoundsMin,
+                  Number(event.target.value),
+                )
+              }
+            />
+          </div>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={search.discountOnly}
+              onChange={(event) => search.setDiscountOnly(event.target.checked)}
+            />
+            Только со скидкой
           </label>
-          <input
-            id="min-price"
-            className="input price-input"
-            type="number"
-            min={0}
-            placeholder="от"
-            value={search.minPrice ?? ""}
-            onChange={(event) =>
-              search.setPriceRange(
-                event.target.value === "" ? null : Number(event.target.value),
-                search.maxPrice,
-              )
-            }
-          />
-          <label className="muted" htmlFor="max-price">
-            до:
-          </label>
-          <input
-            id="max-price"
-            className="input price-input"
-            type="number"
-            min={0}
-            placeholder="до"
-            value={search.maxPrice ?? ""}
-            onChange={(event) =>
-              search.setPriceRange(
-                search.minPrice,
-                event.target.value === "" ? null : Number(event.target.value),
-              )
-            }
-          />
+          <select
+            className="select"
+            value={search.sortBy}
+            onChange={(event) => search.setSortBy(event.target.value as SortMode)}
+            aria-label="Сортировка"
+          >
+            <option value="default">Без сортировки</option>
+            <option value="price_asc">Цена: по возрастанию</option>
+            <option value="price_desc">Цена: по убыванию</option>
+            <option value="rating_desc">По рейтингу</option>
+          </select>
         </div>
 
         {Object.keys(errors).length > 0 && (

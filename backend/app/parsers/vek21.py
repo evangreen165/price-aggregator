@@ -88,7 +88,14 @@ class TwentyOneVekParser(BaseParser):
         if not state:
             return []
         vendors = state.get("searchResult", {}).get("vendors", []) or []
-        names = [str(v) for v in vendors if str(v).strip()]
+        names: list[str] = []
+        for vendor in vendors:
+            if isinstance(vendor, dict):
+                value = vendor.get("value")
+                if value:
+                    names.append(str(value))
+            elif vendor:
+                names.append(str(vendor))
         if not names:
             return []
         return [{"key": "brand", "label": "Бренд", "options": names[:30]}]

@@ -557,12 +557,33 @@ p {
 
 .price-filter-row {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 4px 0;
 }
 
-.price-input {
-  width: 110px;
-  padding: 7px 10px;
+.range-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.range-labels {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.range-value {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.range {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
 }

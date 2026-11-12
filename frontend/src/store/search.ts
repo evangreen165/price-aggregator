@@ -6,6 +6,8 @@ type SearchStatus = "idle" | "loading" | "success" | "error";
 
 export type LinkOpenMode = "system" | "new_window" | "current_window";
 
+export type SortMode = "default" | "price_asc" | "price_desc" | "rating_desc";
+
 type SearchStore = {
   query: string;
   marketplaces: string[];
@@ -25,6 +27,8 @@ type SearchStore = {
   pageStart: number;
   minPrice: number | null;
   maxPrice: number | null;
+  sortBy: SortMode;
+  discountOnly: boolean;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
   runSearch: (mode?: { pageStart?: number; append?: boolean }) => Promise<void>;
@@ -38,6 +42,8 @@ type SearchStore = {
   setItemsPerPage: (count: number) => void;
   setDeepPagination: (enabled: boolean) => void;
   setPriceRange: (min: number | null, max: number | null) => void;
+  setSortBy: (sortBy: SortMode) => void;
+  setDiscountOnly: (enabled: boolean) => void;
 };
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
@@ -59,6 +65,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   pageStart: 1,
   minPrice: null,
   maxPrice: null,
+  sortBy: "default",
+  discountOnly: false,
 
   setQuery: (query) => set({ query }),
 
@@ -151,5 +159,9 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
 
   setDeepPagination: (deepPagination) => set({ deepPagination }),
 
-  setPriceRange: (minPrice, maxPrice) => set({ minPrice, maxPrice }),
+  setPriceRange: (minPrice, maxPrice) => set({ minPrice, maxPrice, currentPage: 1 }),
+
+  setSortBy: (sortBy) => set({ sortBy, currentPage: 1 }),
+
+  setDiscountOnly: (discountOnly) => set({ discountOnly, currentPage: 1 }),
 }));

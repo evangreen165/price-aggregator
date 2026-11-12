@@ -6,7 +6,6 @@ import httpx
 
 from app.parsers import PARSERS, get_parser, list_parsers
 from app.parsers.aliexpress import AliExpressParser
-from app.parsers.dealby import DealByParser
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
 from app.parsers.vek21 import TwentyOneVekParser
@@ -278,7 +277,10 @@ _VEK21_STATE = {
                 "price": {"price": "1200.00"},
             }
         },
-        "vendors": ["Apple", "Samsung", "Xiaomi"],
+        "vendors": [
+            {"count": 89, "value": "G-Case", "index": 0},
+            {"count": 54, "value": "Mio Tesoro", "index": 1},
+        ],
     }
 }
 
@@ -307,45 +309,14 @@ def test_vek21_search_and_filters() -> None:
     assert len(products) == 1
     filters = asyncio.run(parser.fetch_filters("планшет"))
     assert filters[0]["key"] == "brand"
-    assert "Apple" in filters[0]["options"]
-
-
-DEALBY_HTML = """
-<html><body>
-<div class="search-item">
-  <a href="/item/12345" title="Планшет Lenovo Tab">Планшет Lenovo Tab</a>
-  <span>599.00 р.</span>
-</div>
-<div class="search-item">
-  <a href="/goods/999" title="Планшет Prestigio">Планшет Prestigio</a>
-  <span>349.00 р.</span>
-</div>
-</body></html>
-"""
-
-
-def test_dealby_extract_and_add() -> None:
-    parser = DealByParser()
-    items = parser._extract(DEALBY_HTML)
-    assert len(items) == 2
-    products: list = []
-    parser._add_products(products, set(), items, "belarus")
-    assert products[0].title == "Планшет Lenovo Tab"
-    assert products[0].price == 599.0
-    assert products[0].url == "https://deal.by/item/12345"
-
-
-def test_dealby_search() -> None:
-    transport = httpx.MockTransport(lambda _request: httpx.Response(200, text=DEALBY_HTML))
-    parser = DealByParser(client=httpx.AsyncClient(transport=transport))
-    products = asyncio.run(parser.search("планшет", "belarus", limit_pages=1))
-    assert len(products) == 2
+    assert filters[0]["options"] == ["G-Case", "Mio Tesoro"]
 
 
 def test_registry_lists_and_resolves_all_parsers() -> None:
-    assert set(PARSERS) == {"kufar", "onliner", "aliexpress", "21vek", "dealby"}
+    assert set(PARSERS) == {"kufar", "onliner", "aliexpress", "21vek"}
     for marketplace_id in PARSERS:
         assert get_parser(marketplace_id) is not None
+    assert get_parser("dealby") is None
     assert get_parser("ozon") is None
     assert get_parser("wb") is None
     ids = {entry["marketplace_id"] for entry in list_parsers()}

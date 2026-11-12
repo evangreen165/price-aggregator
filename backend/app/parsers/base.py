@@ -61,6 +61,7 @@ class Product:
     marketplace: str
     region: str
     parsed_at: datetime = field(default_factory=datetime.now)
+    rating: float | None = None
 
     def to_dict(self) -> dict:
         data = asdict(self)

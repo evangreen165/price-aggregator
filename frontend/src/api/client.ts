@@ -24,6 +24,7 @@ export type Product = {
   marketplace: string;
   region: string;
   parsed_at: string;
+  rating?: number | null;
 };
 
 export type SearchRequest = {

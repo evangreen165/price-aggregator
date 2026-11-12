@@ -116,9 +116,14 @@ class AliExpressParser(BaseParser):
         product_id = snippet.get("id") or pdp.get("productId")
         if not title or price is None or not product_id:
             return None
+        try:
+            rating = float(pdp["rating"]) if pdp.get("rating") is not None else None
+        except (TypeError, ValueError):
+            rating = None
         return {
             "title": str(title),
             "price": price,
+            "rating": rating,
             "url": f"https://aliexpress.ru/item/{product_id}.html",
         }
 
@@ -144,6 +149,7 @@ class AliExpressParser(BaseParser):
                     marketplace=self.marketplace_id,
                     region=region,
                     parsed_at=now,
+                    rating=item.get("rating"),
                 )
             )
             added += 1
