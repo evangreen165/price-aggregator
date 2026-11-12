@@ -58,7 +58,9 @@
 - [x] AliExpress удалён из UI и реестра.
 - [ ] Новая площадка добавлена — **не выполнено**: 5element/emall/megamarket не отдают товары
       по поиску с текущего IP/структуры (зафиксировано в `research/test_new_shops.py`).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43285483075](https://github.com/evangreen165/price-aggregator/actions/runs/43285483075),
+      `conclusion: success` (backend: ruff + 24 теста, frontend: typecheck + build).
 
 ## Замечания
 
