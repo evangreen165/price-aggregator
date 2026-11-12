@@ -100,4 +100,6 @@ dist/assets/index-*.js        216.36 kB
 - [x] Результаты поиска не исчезают при переключении на вкладку «Настройки» и обратно
       (состояние в Zustand-сторе).
 - [x] «монитор» → специфичные фильтры (разрешение, частота), «iphone» → бренд/ОС.
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43225465397](https://github.com/evangreen165/price-aggregator/actions/runs/43225465397),
+      `conclusion: success` (backend: ruff + 19 тестов, frontend: typecheck + build).
