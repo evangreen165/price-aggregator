@@ -95,7 +95,9 @@ proxy: 200, x-frame-options удалён
 - [x] «samsung» → фильтры бренда (Тип устройства) + категории.
 - [x] Клик по товару открывает страницу внутри приложения с кнопкой «Назад к поиску»
       (iframe + прокси без frame-блокировок).
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43231519018](https://github.com/evangreen165/price-aggregator/actions/runs/43231519018),
+      `conclusion: success` (backend: ruff + 26 тестов, frontend: typecheck + build).
 
 ## Замечания
 
