@@ -83,7 +83,9 @@ facet-name: 0 · f[...]: 0 · catalog-filter: 0
       фасеты; для «планшет» работают фильтры статического классификатора + динамические Kufar.
 - [ ] Поиск Ozon/WB в `.exe` возвращает товары — ожидается на машине пользователя (резидентный IP).
 - [ ] Динамические фильтры в UI — Kufar работает; Ozon/WB заблокированы на текущем IP.
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43250647933](https://github.com/evangreen165/price-aggregator/actions/runs/43250647933),
+      `conclusion: success` (backend: ruff + 43 теста, frontend: typecheck + build).
 
 ## Рекомендуемые следующие шаги
 
