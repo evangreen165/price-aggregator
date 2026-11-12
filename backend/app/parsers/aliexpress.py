@@ -1,42 +1,42 @@
-"""AliExpress parser: best-effort extraction from the wholesale search page."""
+"""AliExpress parser: browser interception of aer-webapi/v2/recommend.
+
+The site's own API is served through an X5 anti-bot layer (direct curl is
+redirected to a punish page), so a headless browser session is used to
+capture the JSON emitted by aer-webapi.
+"""
 
 from __future__ import annotations
 
-import re
 from datetime import datetime
 from urllib.parse import quote
 
-from curl_cffi import requests
+from app.parsers.base import BaseParser, Product, launch_chromium
 
-from app.parsers.base import BaseParser, Product
-
-SEARCH_URL = "https://www.aliexpress.com/w/wholesale-{query}.html"
+SEARCH_PAGE_URL = "https://aliexpress.ru/wholesale"
 MAX_PAGES = 60
-
-HEADERS = {
-    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    ),
-}
 
 
 def _parse_price(value: object) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
+        cleaned = value.replace(" ", "").replace(",", ".")
         try:
-            return float(value.replace(",", "."))
+            return float(cleaned)
         except ValueError:
             return None
+    if isinstance(value, dict):
+        for key in ("price", "salePrice", "value"):
+            parsed = _parse_price(value.get(key))
+            if parsed is not None:
+                return parsed
     return None
 
 
 class AliExpressParser(BaseParser):
     marketplace_id = "aliexpress"
     name = "AliExpress"
-    version = "0.8.0"
+    version = "0.9.0"
     max_items = 3000
 
     async def search(
@@ -50,55 +50,77 @@ class AliExpressParser(BaseParser):
         products: list[Product] = []
         seen: set[str] = set()
         self._truncated = False
-        pages = min(limit_pages, MAX_PAGES - page_start + 1)
 
-        for page in range(page_start, page_start + pages):
-            data = await self._fetch_page(query, page)
-            if data is None:
+        for attempt in range(2):
+            items = await self._browser_items(query, page_start, limit_pages)
+            if items:
+                self._add_products(products, seen, items, region)
                 break
-            added = self._add_products(products, seen, data, region)
-            if not added:
-                break
-            if page == page_start + pages - 1:
-                self._truncated = True
-            if len(products) >= self.max_items:
-                self._truncated = True
-                break
+        if len(products) >= self.max_items:
+            self._truncated = True
 
         return self._apply_filters(products, filters)
 
-    async def _fetch_page(self, query: str, page: int) -> object | None:
-        url = SEARCH_URL.format(query=quote(query))
+    async def _browser_items(self, query: str, page_start: int, limit_pages: int) -> list[dict]:
         try:
-            with requests.Session(impersonate="chrome") as session:
-                response = session.get(
-                    url, params={"page": page}, headers=HEADERS, timeout=25
-                )
-        except Exception:  # noqa: BLE001
-            return None
-        if response.status_code != 200:
-            return None
-        return self._extract(response.text)
+            from playwright.async_api import async_playwright
+        except ImportError:
+            return []
+        try:
+            async with async_playwright() as p:
+                browser = await launch_chromium(p)
+                if browser is None:
+                    return []
+                page = await browser.new_page()
+                captured: list[dict] = []
 
-    def _extract(self, html: str) -> list[dict]:
+                async def on_response(response) -> None:
+                    if "aer-webapi" in response.url and "recommend" in response.url:
+                        try:
+                            body = await response.json()
+                        except Exception:  # noqa: BLE001
+                            return
+                        captured.append(body)
+
+                page.on("response", on_response)
+                url = f"{SEARCH_PAGE_URL}?SearchText={quote(query)}&page={page_start}"
+                await page.goto(url, timeout=60000, wait_until="domcontentloaded")
+                for _ in range(6):
+                    await page.wait_for_timeout(2500)
+                    try:
+                        await page.mouse.wheel(0, 2500)
+                    except Exception:  # noqa: BLE001
+                        break
+                await browser.close()
+        except Exception:  # noqa: BLE001
+            return []
+
         items: list[dict] = []
-        blob = re.search(r"window\.runParams\s*=\s*(\{.*?\})\s*;\s*</script>", html, re.S)
-        source = blob.group(1) if blob else html
-        titles = re.findall(r'"subject"\s*:\s*"([^"]{5,200})"', source)
-        prices = re.findall(r'"salePrice"\s*:\s*"(\d+(?:\.\d+)?)"', source)
-        product_ids = re.findall(r'"productId"\s*:\s*"?(\d+)"?', source)
-        detail_urls = re.findall(r'"productDetailUrl"\s*:\s*"([^"]+)"', source)
-        count = min(len(titles), len(prices), len(product_ids))
-        for index in range(count):
-            items.append(
-                {
-                    "title": titles[index],
-                    "price": prices[index],
-                    "productId": product_ids[index],
-                    "url": detail_urls[index] if index < len(detail_urls) else None,
-                }
-            )
+        for body in captured:
+            data = body.get("data") or {}
+            snippets = data.get("snippetsV2") or []
+            if not snippets:
+                continue
+            for snippet in snippets:
+                item = self._product_from_snippet(snippet)
+                if item:
+                    items.append(item)
         return items
+
+    @staticmethod
+    def _product_from_snippet(snippet: dict) -> dict | None:
+        container = (snippet.get("snippetContainer") or {}).get("itemData") or {}
+        pdp = (container.get("pdpInfo") or {}).get("preloadedData") or {}
+        title = pdp.get("title") or pdp.get("name") or snippet.get("id")
+        price = _parse_price(pdp.get("price") or pdp.get("salePrice"))
+        product_id = snippet.get("id") or pdp.get("productId")
+        if not title or price is None or not product_id:
+            return None
+        return {
+            "title": str(title),
+            "price": price,
+            "url": f"https://aliexpress.ru/item/{product_id}.html",
+        }
 
     def _add_products(
         self, products: list[Product], seen: set[str], items: list[dict], region: str
@@ -107,24 +129,17 @@ class AliExpressParser(BaseParser):
         added = 0
         for item in items:
             title = str(item.get("title", "")).strip()
-            price = _parse_price(item.get("price"))
-            product_id = item.get("productId")
-            if not title or price is None or not product_id:
-                continue
-            url = (
-                str(item.get("url"))
-                if item.get("url")
-                else f"https://www.aliexpress.com/item/{product_id}.html"
-            )
-            if url in seen:
+            url = str(item.get("url", "")).strip()
+            price = item.get("price")
+            if not title or not url or price is None or url in seen:
                 continue
             seen.add(url)
             products.append(
                 Product(
                     title=title,
-                    price=price,
+                    price=float(price),
                     old_price=None,
-                    currency="USD",
+                    currency="RUB",
                     url=url,
                     marketplace=self.marketplace_id,
                     region=region,

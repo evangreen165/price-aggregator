@@ -227,36 +227,46 @@ def test_onliner_search_caps_items() -> None:
     assert parser._truncated is True
 
 
-ALIEXPRESS_HTML = """
-<script>
-window.runParams = {"data": {"subject": "Планшет Xiaomi Pad", "salePrice": "199.99",
-  "productId": "1005001", "productDetailUrl": "https://www.aliexpress.com/item/1005001.html"}};
-</script>
-"""
+def _aliexpress_snippet(title: str, price: str, product_id: int) -> dict:
+    return {
+        "id": str(product_id),
+        "snippetContainer": {
+            "itemData": {
+                "pdpInfo": {
+                    "preloadedData": {
+                        "title": title,
+                        "price": price,
+                        "productId": product_id,
+                    }
+                }
+            }
+        },
+    }
 
 
-def test_aliexpress_extract_and_add() -> None:
+def test_aliexpress_snippet_to_product() -> None:
     parser = AliExpressParser()
-    items = parser._extract(ALIEXPRESS_HTML)
-    assert len(items) == 1
-    products: list = []
-    parser._add_products(products, set(), items, "belarus")
-    assert products[0].title == "Планшет Xiaomi Pad"
-    assert products[0].price == 199.99
-    assert products[0].marketplace == "aliexpress"
+    snippet = _aliexpress_snippet("Планшет Xiaomi Pad", "199.99", 1005001)
+    item = parser._product_from_snippet(snippet)
+    assert item["title"] == "Планшет Xiaomi Pad"
+    assert item["price"] == 199.99
+    assert "1005001" in item["url"]
 
 
 def test_aliexpress_search_collects(monkeypatch) -> None:
     parser = AliExpressParser()
 
-    async def fake_fetch_page(query: str, page: int) -> object:
-        return [
-            {"title": f"Планшет {page}", "price": "100", "productId": str(page), "url": None}
-        ]
+    async def fake_browser_items(query: str, page_start: int, limit_pages: int) -> list[dict]:
+        items = []
+        for index in range(2):
+            snippet = _aliexpress_snippet(f"Планшет {index}", "100", 1005000 + index)
+            items.append(parser._product_from_snippet(snippet))
+        return items
 
-    monkeypatch.setattr(parser, "_fetch_page", fake_fetch_page)
-    products = asyncio.run(parser.search("планшет", "belarus", limit_pages=2))
+    monkeypatch.setattr(parser, "_browser_items", fake_browser_items)
+    products = asyncio.run(parser.search("планшет", "belarus", limit_pages=1))
     assert len(products) == 2
+    assert products[0].marketplace == "aliexpress"
 
 
 _VEK21_STATE = {

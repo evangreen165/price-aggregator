@@ -59,7 +59,7 @@ class TwentyOneVekParser(BaseParser):
             for page in range(page_start, page_start + limit_pages):
                 response = await client.get(
                     SEARCH_URL,
-                    params={"text": query, "page": page},
+                    params={"term": query, "page": page},
                     headers=HEADERS,
                 )
                 response.raise_for_status()
@@ -81,7 +81,7 @@ class TwentyOneVekParser(BaseParser):
         """Return brand options from the search result vendors block."""
         async with self._client() as client:
             response = await client.get(
-                SEARCH_URL, params={"text": query}, headers=HEADERS
+                SEARCH_URL, params={"term": query}, headers=HEADERS
             )
             response.raise_for_status()
         state = self._parse_state(response.text)
