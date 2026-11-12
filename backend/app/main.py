@@ -30,7 +30,6 @@ from app.core.config import (
 )
 from app.parsers import get_parser
 from app.parsers.base import MarketplaceBlockedError
-from app.parsers.categories import classify, filters_for_query
 from app.plugins import get_manager
 
 logger = logging.getLogger(__name__)
@@ -63,23 +62,6 @@ app = FastAPI(title=APP_NAME, lifespan=lifespan)
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.get("/api/filters")
-async def filters(query: str = "", marketplace: str = "") -> dict:
-    categories = classify(query)
-    payload = {"query": query, "category": categories[0], "categories": categories}
-    parser = get_parser(marketplace) if marketplace else None
-    if parser is not None and hasattr(parser, "fetch_filters"):
-        try:
-            dynamic = await parser.fetch_filters(query)
-        except Exception:  # noqa: BLE001 - fall back to the static classifier
-            dynamic = []
-        if dynamic:
-            payload["filters"] = dynamic
-            return payload
-    payload["filters"] = filters_for_query(query)
-    return payload
 
 
 _PROXY_HEADERS = {
@@ -128,7 +110,8 @@ class SearchRequest(BaseModel):
     region: str = "belarus"
     limit_pages: int = 10
     filters: dict[str, list[str]] = {}
-    page_start: int = 1
+    page: dict[str, int] = {}
+    cursor: dict[str, str] = {}
 
 
 @app.post("/api/search")
@@ -136,28 +119,43 @@ async def search(req: SearchRequest) -> dict:
     results: dict[str, list[dict]] = {}
     errors: dict[str, str] = {}
     meta: dict[str, dict] = {}
+    next_page: dict[str, int | None] = {}
+    next_cursor: dict[str, str | None] = {}
     for marketplace_id in req.marketplaces:
         parser = get_parser(marketplace_id)
         if parser is None:
             continue
         results[marketplace_id] = []
         meta[marketplace_id] = {"truncated": False}
+        next_page[marketplace_id] = None
+        next_cursor[marketplace_id] = None
         try:
             products = await parser.search(
                 req.query,
                 req.region,
                 req.limit_pages,
                 req.filters,
-                req.page_start,
+                req.page.get(marketplace_id, 1),
+                req.cursor.get(marketplace_id),
             )
             results[marketplace_id] = [product.to_dict() for product in products]
-            meta[marketplace_id] = {"truncated": bool(getattr(parser, "_truncated", False))}
+            truncated = bool(getattr(parser, "_truncated", False))
+            meta[marketplace_id] = {"truncated": truncated}
+            if truncated:
+                next_page[marketplace_id] = req.page.get(marketplace_id, 1) + req.limit_pages
+                next_cursor[marketplace_id] = getattr(parser, "_next_cursor", None)
         except MarketplaceBlockedError:
             errors[marketplace_id] = "Заблокировано (403)"
         except Exception as exc:  # noqa: BLE001 - a failing marketplace must not break others
             logger.exception("Search failed for marketplace %s", marketplace_id)
             errors[marketplace_id] = str(exc)
-    return {"results": results, "errors": errors, "meta": meta}
+    return {
+        "results": results,
+        "errors": errors,
+        "meta": meta,
+        "next_page": next_page,
+        "next_cursor": next_cursor,
+    }
 
 
 if FRONTEND_DIST.is_dir():

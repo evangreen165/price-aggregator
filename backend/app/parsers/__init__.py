@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from app.parsers.aliexpress import AliExpressParser
 from app.parsers.base import BaseParser, Product
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
@@ -11,7 +10,6 @@ from app.parsers.vek21 import TwentyOneVekParser
 PARSERS: dict[str, type[BaseParser]] = {
     KufarParser.marketplace_id: KufarParser,
     OnlinerParser.marketplace_id: OnlinerParser,
-    AliExpressParser.marketplace_id: AliExpressParser,
     TwentyOneVekParser.marketplace_id: TwentyOneVekParser,
 }
 

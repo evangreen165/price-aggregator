@@ -5,7 +5,6 @@ import json
 import httpx
 
 from app.parsers import PARSERS, get_parser, list_parsers
-from app.parsers.aliexpress import AliExpressParser
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
 from app.parsers.vek21 import TwentyOneVekParser
@@ -101,6 +100,21 @@ def test_kufar_search_continues_from_page_start() -> None:
     assert [product.title for product in products] == ["Монитор 34"]
 
 
+def test_kufar_search_resumes_from_cursor() -> None:
+    ad_e = {
+        "subject": "Монитор 40",
+        "ad_link": "https://www.kufar.by/item/5",
+        "price_byn": 90000,
+        "ad_parameters": [],
+    }
+    handler = _kufar_handler(KUFAR_HTML, {5: [ad_e]})
+    parser = KufarParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    cursor = _kufar_token("PIT1", 5)
+    products = asyncio.run(parser.search("монитор", "belarus", limit_pages=1, cursor=cursor))
+    assert [product.title for product in products] == ["Монитор 40"]
+    assert parser._next_cursor is not None
+
+
 def test_kufar_search_applies_filters() -> None:
     ad_samsung = {
         "subject": "Телевизор Samsung 55",
@@ -121,26 +135,6 @@ def test_kufar_search_applies_filters() -> None:
     )
     assert len(products) == 1
     assert "Samsung" in products[0].title
-
-
-KUFAR_FILTERS_HTML = """
-<html><body><script id="__NEXT_DATA__" type="application/json">
-{"props":{"initialState":{"filters":{"currentFilters":[
-  {"url_name":"prn","labels":{"name":{"ru":"Категория"}},
-   "values":[{"labels":{"ru":"Планшеты"}},{"labels":{"ru":"Смартфоны"}}]},
-  {"url_name":"bt","labels":{"name":{"ru":"Бренд"}},
-   "values":[{"labels":{"ru":"Apple"}},{"labels":{"ru":"Samsung"}}]}
-]}}}}
-</script></body></html>
-"""
-
-
-def test_kufar_fetch_filters() -> None:
-    transport = httpx.MockTransport(lambda _request: httpx.Response(200, text=KUFAR_FILTERS_HTML))
-    parser = KufarParser(client=httpx.AsyncClient(transport=transport))
-    filters = asyncio.run(parser.fetch_filters("планшет"))
-    assert filters[0]["label"] == "Категория"
-    assert "Планшеты" in filters[0]["options"]
 
 
 def test_kufar_search_caps_items() -> None:
@@ -226,48 +220,6 @@ def test_onliner_search_caps_items() -> None:
     assert parser._truncated is True
 
 
-def _aliexpress_snippet(title: str, price: str, product_id: int) -> dict:
-    return {
-        "id": str(product_id),
-        "snippetContainer": {
-            "itemData": {
-                "pdpInfo": {
-                    "preloadedData": {
-                        "title": title,
-                        "price": price,
-                        "productId": product_id,
-                    }
-                }
-            }
-        },
-    }
-
-
-def test_aliexpress_snippet_to_product() -> None:
-    parser = AliExpressParser()
-    snippet = _aliexpress_snippet("Планшет Xiaomi Pad", "199.99", 1005001)
-    item = parser._product_from_snippet(snippet)
-    assert item["title"] == "Планшет Xiaomi Pad"
-    assert item["price"] == 199.99
-    assert "1005001" in item["url"]
-
-
-def test_aliexpress_search_collects(monkeypatch) -> None:
-    parser = AliExpressParser()
-
-    async def fake_browser_items(query: str, page_start: int, limit_pages: int) -> list[dict]:
-        items = []
-        for index in range(2):
-            snippet = _aliexpress_snippet(f"Планшет {index}", "100", 1005000 + index)
-            items.append(parser._product_from_snippet(snippet))
-        return items
-
-    monkeypatch.setattr(parser, "_browser_items", fake_browser_items)
-    products = asyncio.run(parser.search("планшет", "belarus", limit_pages=1))
-    assert len(products) == 2
-    assert products[0].marketplace == "aliexpress"
-
-
 _VEK21_STATE = {
     "searchResult": {
         "products": {
@@ -302,20 +254,19 @@ def test_vek21_extract_and_add() -> None:
     assert products[0].url == "https://www.21vek.by/products/1"
 
 
-def test_vek21_search_and_filters() -> None:
+def test_vek21_search() -> None:
     transport = httpx.MockTransport(lambda _request: httpx.Response(200, text=VEK21_HTML))
     parser = TwentyOneVekParser(client=httpx.AsyncClient(transport=transport))
     products = asyncio.run(parser.search("планшет", "belarus", limit_pages=1))
     assert len(products) == 1
-    filters = asyncio.run(parser.fetch_filters("планшет"))
-    assert filters[0]["key"] == "brand"
-    assert filters[0]["options"] == ["G-Case", "Mio Tesoro"]
+    assert products[0].title == "Планшет Apple iPad 10"
 
 
 def test_registry_lists_and_resolves_all_parsers() -> None:
-    assert set(PARSERS) == {"kufar", "onliner", "aliexpress", "21vek"}
+    assert set(PARSERS) == {"kufar", "onliner", "21vek"}
     for marketplace_id in PARSERS:
         assert get_parser(marketplace_id) is not None
+    assert get_parser("aliexpress") is None
     assert get_parser("dealby") is None
     assert get_parser("ozon") is None
     assert get_parser("wb") is None

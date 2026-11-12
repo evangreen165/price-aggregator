@@ -33,25 +33,16 @@ export type SearchRequest = {
   region: string;
   limit_pages?: number;
   filters?: Record<string, string[]>;
-  page_start?: number;
+  page?: Record<string, number>;
+  cursor?: Record<string, string>;
 };
 
 export type SearchResponse = {
   results: Record<string, Product[]>;
   errors: Record<string, string>;
   meta: Record<string, { truncated: boolean }>;
-};
-
-export type FilterOption = {
-  key: string;
-  label: string;
-  options: string[];
-};
-
-export type FiltersResponse = {
-  query: string;
-  category: string;
-  filters: FilterOption[];
+  next_page: Record<string, number | null>;
+  next_cursor: Record<string, string | null>;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
@@ -92,12 +83,4 @@ export function reloadPlugins(): Promise<PluginsReloadResponse> {
 
 export function searchProducts(request: SearchRequest): Promise<SearchResponse> {
   return apiPost<SearchResponse>("/api/search", request);
-}
-
-export function getFilters(query: string, marketplace?: string): Promise<FiltersResponse> {
-  const params = new URLSearchParams({ query });
-  if (marketplace) {
-    params.set("marketplace", marketplace);
-  }
-  return apiGet<FiltersResponse>(`/api/filters?${params.toString()}`);
 }

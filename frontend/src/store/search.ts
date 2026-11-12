@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { FilterOption, Product, searchProducts } from "../api/client";
+import { Product, searchProducts } from "../api/client";
 
 type SearchStatus = "idle" | "loading" | "success" | "error";
 
@@ -16,27 +16,24 @@ type SearchStore = {
   errors: Record<string, string>;
   meta: Record<string, { truncated: boolean }>;
   requestError: string | null;
-  filters: FilterOption[];
-  filtersCategory: string | null;
-  filtersLoading: boolean;
-  selectedFilters: Record<string, string[]>;
+  nextPage: Record<string, number | null>;
+  nextCursor: Record<string, string | null>;
   linkOpenMode: LinkOpenMode;
   currentPage: number;
   itemsPerPage: number;
   deepPagination: boolean;
-  pageStart: number;
   minPrice: number | null;
   maxPrice: number | null;
   sortBy: SortMode;
   discountOnly: boolean;
   setQuery: (query: string) => void;
   toggleMarketplace: (id: string) => void;
-  runSearch: (mode?: { pageStart?: number; append?: boolean }) => Promise<void>;
+  runSearch: (mode?: {
+    page?: Record<string, number>;
+    cursor?: Record<string, string>;
+    append?: boolean;
+  }) => Promise<void>;
   loadMore: () => Promise<void>;
-  setFilters: (category: string | null, filters: FilterOption[]) => void;
-  setFiltersLoading: (loading: boolean) => void;
-  toggleFilterOption: (key: string, option: string) => void;
-  clearFilters: () => void;
   setLinkOpenMode: (mode: LinkOpenMode) => void;
   setCurrentPage: (page: number) => void;
   setItemsPerPage: (count: number) => void;
@@ -48,21 +45,18 @@ type SearchStore = {
 
 export const useSearchStore = create<SearchStore>((set, get) => ({
   query: "",
-  marketplaces: ["kufar", "onliner"],
+  marketplaces: [],
   status: "idle",
   results: {},
   errors: {},
   meta: {},
   requestError: null,
-  filters: [],
-  filtersCategory: null,
-  filtersLoading: false,
-  selectedFilters: {},
+  nextPage: {},
+  nextCursor: {},
   linkOpenMode: "current_window",
   currentPage: 1,
   itemsPerPage: 50,
   deepPagination: false,
-  pageStart: 1,
   minPrice: null,
   maxPrice: null,
   sortBy: "default",
@@ -78,11 +72,9 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     })),
 
   runSearch: async (mode) => {
-    const { query, marketplaces, selectedFilters, deepPagination } = get();
-    const filters = Object.fromEntries(
-      Object.entries(selectedFilters).filter(([, options]) => options.length > 0),
-    );
-    const pageStart = mode?.pageStart ?? 1;
+    const { query, marketplaces, deepPagination } = get();
+    const page = mode?.page ?? {};
+    const cursor = mode?.cursor ?? {};
     const append = mode?.append ?? false;
     set({ status: "loading", requestError: null });
     try {
@@ -91,8 +83,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
         marketplaces,
         region: "belarus",
         limit_pages: deepPagination ? 50 : 10,
-        filters,
-        page_start: pageStart,
+        page,
+        cursor,
       });
       if (append) {
         const merged: Record<string, Product[]> = {};
@@ -109,7 +101,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
           results: merged,
           errors: response.errors,
           meta: response.meta,
-          pageStart: pageStart + 1,
+          nextPage: response.next_page,
+          nextCursor: response.next_cursor,
         });
       } else {
         set({
@@ -117,8 +110,9 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
           results: response.results,
           errors: response.errors,
           meta: response.meta,
+          nextPage: response.next_page,
+          nextCursor: response.next_cursor,
           currentPage: 1,
-          pageStart: 2,
         });
       }
     } catch (error) {
@@ -132,24 +126,21 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   },
 
   loadMore: async () => {
-    const { pageStart } = get();
-    await get().runSearch({ pageStart, append: true });
+    const { nextPage, nextCursor, marketplaces } = get();
+    const page: Record<string, number> = {};
+    const cursor: Record<string, string> = {};
+    for (const marketplace of marketplaces) {
+      if (nextCursor[marketplace]) {
+        cursor[marketplace] = nextCursor[marketplace] as string;
+      } else if (nextPage[marketplace] != null) {
+        page[marketplace] = nextPage[marketplace] as number;
+      }
+    }
+    if (Object.keys(page).length === 0 && Object.keys(cursor).length === 0) {
+      return;
+    }
+    await get().runSearch({ page, cursor, append: true });
   },
-
-  setFilters: (filtersCategory, filters) => set({ filtersCategory, filters }),
-
-  setFiltersLoading: (filtersLoading) => set({ filtersLoading }),
-
-  toggleFilterOption: (key, option) =>
-    set((state) => {
-      const current = state.selectedFilters[key] ?? [];
-      const next = current.includes(option)
-        ? current.filter((item) => item !== option)
-        : [...current, option];
-      return { selectedFilters: { ...state.selectedFilters, [key]: next } };
-    }),
-
-  clearFilters: () => set({ selectedFilters: {} }),
 
   setLinkOpenMode: (linkOpenMode) => set({ linkOpenMode }),
 

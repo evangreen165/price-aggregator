@@ -1,13 +1,12 @@
-import { useEffect, type MouseEvent } from "react";
+import { useState, type MouseEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { getFilters, Product } from "../api/client";
+import { Product } from "../api/client";
 import { SortMode, useSearchStore } from "../store/search";
 
 const MARKETPLACES = [
   { id: "kufar", label: "Kufar" },
   { id: "onliner", label: "Onliner" },
-  { id: "aliexpress", label: "AliExpress (нестабильно)" },
   { id: "21vek", label: "21vek.by" },
 ];
 
@@ -59,6 +58,7 @@ function ProductCard({ product }: { product: Product }) {
         <span className="result-price">
           {product.price === null ? "—" : priceFormat.format(product.price)} {product.currency}
         </span>
+        {product.rating != null && <span className="muted">★ {product.rating}</span>}
         <span className="muted">
           регион: {product.region} · {new Date(product.parsed_at).toLocaleString("ru-RU")}
         </span>
@@ -70,28 +70,15 @@ function ProductCard({ product }: { product: Product }) {
 export default function SearchPage() {
   const search = useSearchStore();
   const { query, marketplaces, status, results, errors, requestError } = search;
+  const [draftMin, setDraftMin] = useState("");
+  const [draftMax, setDraftMax] = useState("");
 
-  useEffect(() => {
-    const trimmed = query.trim();
-    if (!trimmed) {
-      search.setFilters(null, []);
-      search.setFiltersLoading(false);
-      return;
-    }
-    search.setFiltersLoading(true);
-    const marketplace = marketplaces.length > 0 ? marketplaces[0] : undefined;
-    const timer = setTimeout(async () => {
-      try {
-        const response = await getFilters(trimmed, marketplace);
-        search.setFilters(response.category, response.filters);
-      } catch {
-        search.setFilters(null, []);
-      } finally {
-        search.setFiltersLoading(false);
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [query, marketplaces]);
+  const applyPrice = () => {
+    search.setPriceRange(
+      draftMin === "" ? null : Number(draftMin),
+      draftMax === "" ? null : Number(draftMax),
+    );
+  };
 
   const canSubmit = query.trim().length > 0 && marketplaces.length > 0 && status !== "loading";
 
@@ -128,12 +115,6 @@ export default function SearchPage() {
   }
   priceFiltered = sorted;
 
-  const prices = allProducts.map((product) => product.price ?? 0).filter((price) => price > 0);
-  const priceBoundsMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
-  const priceBoundsMax = prices.length ? Math.ceil(Math.max(...prices)) : 1000;
-  const sliderMin = search.minPrice ?? priceBoundsMin;
-  const sliderMax = search.maxPrice ?? priceBoundsMax;
-
   const totalPages =
     search.itemsPerPage > 0
       ? Math.max(1, Math.ceil(priceFiltered.length / search.itemsPerPage))
@@ -148,12 +129,14 @@ export default function SearchPage() {
     ? Math.min(sliceStart + search.itemsPerPage, priceFiltered.length)
     : priceFiltered.length;
   const truncated = Object.values(search.meta).some((entry) => entry.truncated);
+  const hasMore = Object.values(search.nextPage).some((page) => page != null) ||
+    Object.values(search.nextCursor).some((cursor) => cursor != null);
 
   return (
     <section className="page">
       <header className="page-header">
         <h2>Поиск</h2>
-        <p>Поиск по выбранным маркетплейсам: Kufar, Onliner, Ozon и Wildberries.</p>
+        <p>Введите запрос с параметрами, например: «монитор 27 2K IPS».</p>
       </header>
 
       <div className="card">
@@ -167,7 +150,7 @@ export default function SearchPage() {
           <input
             className="input"
             type="text"
-            placeholder="Например: монитор"
+            placeholder="Например: монитор 27 2K IPS"
             value={query}
             onChange={(event) => search.setQuery(event.target.value)}
           />
@@ -190,43 +173,57 @@ export default function SearchPage() {
           ))}
         </div>
 
-        {search.filtersLoading && <p className="muted">Подбираем фильтры…</p>}
-        {!search.filtersLoading && search.filters.length > 0 && (
-          <div className="filters-box">
-            <div className="filters-box-head">
-              <span className="muted">Фильтры</span>
-              <button
-                className="button link-button"
-                type="button"
-                onClick={() => search.clearFilters()}
-                disabled={Object.keys(search.selectedFilters).length === 0}
-              >
-                Очистить все
-              </button>
-            </div>
-            {search.filters.map((group) => (
-              <fieldset className="filter-group" key={group.key}>
-                <legend>{group.label}</legend>
-                {group.options.map((option) => {
-                  const checked = search.selectedFilters[group.key]?.includes(option) ?? false;
-                  return (
-                    <label
-                      className={checked ? "checkbox selected" : "checkbox"}
-                      key={option}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => search.toggleFilterOption(group.key, option)}
-                      />
-                      {option}
-                    </label>
-                  );
-                })}
-              </fieldset>
-            ))}
-          </div>
-        )}
+        <div className="price-filter-row">
+          <label className="muted" htmlFor="min-price">
+            Цена от:
+          </label>
+          <input
+            id="min-price"
+            className="input price-input"
+            type="number"
+            min={0}
+            placeholder="от"
+            value={draftMin}
+            onChange={(event) => setDraftMin(event.target.value)}
+          />
+          <label className="muted" htmlFor="max-price">
+            до:
+          </label>
+          <input
+            id="max-price"
+            className="input price-input"
+            type="number"
+            min={0}
+            placeholder="до"
+            value={draftMax}
+            onChange={(event) => setDraftMax(event.target.value)}
+          />
+          <button className="button" type="button" onClick={applyPrice}>
+            Применить
+          </button>
+        </div>
+
+        <div className="price-filter-row">
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              checked={search.discountOnly}
+              onChange={(event) => search.setDiscountOnly(event.target.checked)}
+            />
+            Только со скидкой
+          </label>
+          <select
+            className="select"
+            value={search.sortBy}
+            onChange={(event) => search.setSortBy(event.target.value as SortMode)}
+            aria-label="Сортировка"
+          >
+            <option value="default">Без сортировки</option>
+            <option value="price_asc">Цена: по возрастанию</option>
+            <option value="price_desc">Цена: по убыванию</option>
+            <option value="rating_desc">По рейтингу</option>
+          </select>
+        </div>
 
         <div className="per-page-row">
           <label className="muted" htmlFor="per-page">
@@ -253,70 +250,13 @@ export default function SearchPage() {
           Глубокая пагинация (медленнее, до 50 страниц)
         </label>
 
-        <p className="muted">Регион: Беларусь. Выбранные фильтры применяются к результатам.</p>
+        <p className="muted">Регион: Беларусь.</p>
       </div>
 
       <div className="card">
         <div className="card-header">
           <h3>Результаты</h3>
           {status === "success" && <span className="muted">найдено: {priceFiltered.length}</span>}
-        </div>
-
-        <div className="price-filter-row">
-          <div className="range-block">
-            <div className="range-labels">
-              <span className="muted">Цена:</span>
-              <span className="range-value">{sliderMin}</span>
-              <span className="muted">—</span>
-              <span className="range-value">{sliderMax}</span>
-              <span className="muted">{allProducts[0]?.currency ?? "BYN"}</span>
-            </div>
-            <input
-              className="range"
-              type="range"
-              min={priceBoundsMin}
-              max={priceBoundsMax}
-              value={sliderMin}
-              onChange={(event) =>
-                search.setPriceRange(
-                  Number(event.target.value),
-                  search.maxPrice ?? priceBoundsMax,
-                )
-              }
-            />
-            <input
-              className="range"
-              type="range"
-              min={priceBoundsMin}
-              max={priceBoundsMax}
-              value={sliderMax}
-              onChange={(event) =>
-                search.setPriceRange(
-                  search.minPrice ?? priceBoundsMin,
-                  Number(event.target.value),
-                )
-              }
-            />
-          </div>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              checked={search.discountOnly}
-              onChange={(event) => search.setDiscountOnly(event.target.checked)}
-            />
-            Только со скидкой
-          </label>
-          <select
-            className="select"
-            value={search.sortBy}
-            onChange={(event) => search.setSortBy(event.target.value as SortMode)}
-            aria-label="Сортировка"
-          >
-            <option value="default">Без сортировки</option>
-            <option value="price_asc">Цена: по возрастанию</option>
-            <option value="price_desc">Цена: по убыванию</option>
-            <option value="rating_desc">По рейтингу</option>
-          </select>
         </div>
 
         {Object.keys(errors).length > 0 && (
@@ -339,11 +279,11 @@ export default function SearchPage() {
           </p>
         )}
 
-        {status === "success" && allProducts.length === 0 && (
+        {status === "success" && priceFiltered.length === 0 && (
           <p className="muted">Товары не найдены.</p>
         )}
 
-        {status === "success" && allProducts.length > 0 && (
+        {status === "success" && priceFiltered.length > 0 && (
           <>
             <ul className="result-list">
               {visibleProducts.map((product) => (
@@ -389,18 +329,19 @@ export default function SearchPage() {
             )}
 
             <div className="results-footer">
-              <button
-                className="button"
-                type="button"
-                onClick={() => search.loadMore()}
-                disabled={search.status === "loading"}
-              >
-                Загрузить ещё {search.itemsPerPage} товаров
-              </button>
+              {hasMore && (
+                <button
+                  className="button"
+                  type="button"
+                  onClick={() => search.loadMore()}
+                  disabled={search.status === "loading"}
+                >
+                  Загрузить ещё {search.itemsPerPage} товаров
+                </button>
+              )}
               <p className="muted">
                 Найдено {priceFiltered.length} товаров
-                {search.itemsPerPage > 0 &&
-                  `, показано ${sliceStart + 1}–${sliceEnd}`}
+                {search.itemsPerPage > 0 && `, показано ${sliceStart + 1}–${sliceEnd}`}
               </p>
               {truncated && (
                 <p className="muted">

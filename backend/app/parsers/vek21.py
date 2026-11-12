@@ -50,6 +50,7 @@ class TwentyOneVekParser(BaseParser):
         limit_pages: int = 10,
         filters: dict[str, list[str]] | None = None,
         page_start: int = 1,
+        cursor: str | None = None,
     ) -> list[Product]:
         products: list[Product] = []
         seen: set[str] = set()
@@ -76,29 +77,6 @@ class TwentyOneVekParser(BaseParser):
                     break
 
         return self._apply_filters(products, filters)
-
-    async def fetch_filters(self, query: str) -> list[dict]:
-        """Return brand options from the search result vendors block."""
-        async with self._client() as client:
-            response = await client.get(
-                SEARCH_URL, params={"term": query}, headers=HEADERS
-            )
-            response.raise_for_status()
-        state = self._parse_state(response.text)
-        if not state:
-            return []
-        vendors = state.get("searchResult", {}).get("vendors", []) or []
-        names: list[str] = []
-        for vendor in vendors:
-            if isinstance(vendor, dict):
-                value = vendor.get("value")
-                if value:
-                    names.append(str(value))
-            elif vendor:
-                names.append(str(vendor))
-        if not names:
-            return []
-        return [{"key": "brand", "label": "Бренд", "options": names[:30]}]
 
     @staticmethod
     def _parse_state(html: str) -> dict | None:

@@ -33,24 +33,6 @@ DEFAULT_HEADERS = {
 DEFAULT_TIMEOUT = httpx.Timeout(20.0)
 
 
-async def launch_chromium(playwright) -> object | None:
-    """Launch Chromium for scraping, preferring the user's installed browser.
-
-    Always headless: a visible second browser window destabilises the pywebview
-    accessibility event loop in the frozen app.
-    """
-    for kwargs in (
-        {"channel": "chrome", "headless": True},
-        {"channel": "msedge", "headless": True},
-        {"headless": True},
-    ):
-        try:
-            return await playwright.chromium.launch(**kwargs)
-        except Exception:  # noqa: BLE001 - try the next browser option
-            continue
-    return None
-
-
 @dataclass
 class Product:
     title: str
@@ -96,6 +78,7 @@ class BaseParser(ABC):
         limit_pages: int = 10,
         filters: dict[str, list[str]] | None = None,
         page_start: int = 1,
+        cursor: str | None = None,
     ) -> list[Product]:
         raise NotImplementedError
 
