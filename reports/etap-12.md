@@ -65,7 +65,9 @@ XHR. Зафиксировано как известное ограничение
 - [x] Слайдер цены и сортировка по цене/рейтингу работают мгновенно (клиентские).
 - [x] Deal.by удалён из UI (DOM-выдачи нет, API нет).
 - [x] AliExpress помечен «(нестабильно)», приложение не ломается.
-- [ ] CI на GitHub зеленый — проверяется после push.
+- [x] CI на GitHub зеленый — run
+      [#43279020049](https://github.com/evangreen165/price-aggregator/actions/runs/43279020049),
+      `conclusion: success` (backend: ruff + 43 теста, frontend: typecheck + build).
 
 ## Замечания
 
