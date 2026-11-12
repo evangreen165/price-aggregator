@@ -44,36 +44,25 @@ class OnlinerParser(BaseParser):
         seen: set[str] = set()
         self._truncated = False
 
-        sorts: list[str] = ["relevance"]
-        if page_start == 1 and limit_pages >= 10:
-            sorts = ["relevance", "price_asc", "price_desc"]
-
+        # Research (etap-9): the search API caps the catalog at 1000 items and
+        # sort variations (price_asc/price_desc/date) only reorder the same set,
+        # so a single relevance pass is enough.
         async with self._client() as client:
-            for sort in sorts:
-                if len(products) >= self.max_items:
+            for page in range(page_start, page_start + limit_pages):
+                response = await client.get(
+                    SEARCH_URL,
+                    params={"query": query, "group": "1", "limit": PAGE_LIMIT, "page": page},
+                )
+                response.raise_for_status()
+                body = response.json()
+                items = body.get("products", []) if isinstance(body, dict) else []
+                added = self._add_products(products, seen, items, region)
+                if not added:
                     break
-                for page in range(page_start, page_start + limit_pages):
-                    params: dict[str, object] = {
-                        "query": query,
-                        "group": "1",
-                        "limit": PAGE_LIMIT,
-                        "page": page,
-                    }
-                    if sort != "relevance":
-                        params["sort"] = sort
-                    response = await client.get(SEARCH_URL, params=params)
-                    response.raise_for_status()
-                    body = response.json()
-                    items = body.get("products", []) if isinstance(body, dict) else []
-                    added = self._add_products(products, seen, items, region)
-                    if not added:
-                        break
-                    if page == page_start + limit_pages - 1:
-                        self._truncated = True
-                    if len(products) >= self.max_items:
-                        self._truncated = True
-                        break
-                if page_start == 1 and not self._truncated:
+                if page == page_start + limit_pages - 1:
+                    self._truncated = True
+                if len(products) >= self.max_items:
+                    self._truncated = True
                     break
 
         return self._apply_filters(products, filters)
