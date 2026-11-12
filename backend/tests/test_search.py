@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.parsers.base import BaseParser, Product
+from app.parsers.base import BaseParser, MarketplaceBlockedError, Product
 
 
 class FakeKufarParser(BaseParser):
@@ -142,3 +142,28 @@ def test_search_endpoint_passes_filters_and_limit(monkeypatch) -> None:
     assert response.status_code == 200
     assert captured["filters"] == {"brand": ["Samsung"]}
     assert captured["limit_pages"] == 5
+
+
+def test_search_endpoint_maps_blocked_error(monkeypatch) -> None:
+    class BlockedParser(BaseParser):
+        marketplace_id = "ozon"
+
+        async def search(
+            self,
+            query: str,
+            region: str,
+            limit_pages: int = 10,
+            filters: dict[str, list[str]] | None = None,
+        ) -> list[Product]:
+            raise MarketplaceBlockedError("blocked")
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return BlockedParser() if marketplace_id == "ozon" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/search", json={"query": "x", "marketplaces": ["ozon"], "region": "belarus"}
+        )
+    body = response.json()
+    assert body["errors"] == {"ozon": "Заблокировано (403)"}

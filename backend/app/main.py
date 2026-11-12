@@ -29,6 +29,7 @@ from app.core.config import (
     USER_AGENT,
 )
 from app.parsers import get_parser
+from app.parsers.base import MarketplaceBlockedError
 from app.parsers.categories import classify, filters_for_query
 from app.plugins import get_manager
 
@@ -68,8 +69,8 @@ def health() -> dict[str, str]:
 async def filters(query: str = "", marketplace: str = "") -> dict:
     categories = classify(query)
     payload = {"query": query, "category": categories[0], "categories": categories}
-    if marketplace == "kufar":
-        parser = get_parser("kufar")
+    parser = get_parser(marketplace) if marketplace else None
+    if parser is not None and hasattr(parser, "fetch_filters"):
         try:
             dynamic = await parser.fetch_filters(query)
         except Exception:  # noqa: BLE001 - fall back to the static classifier
@@ -146,6 +147,8 @@ async def search(req: SearchRequest) -> dict:
             )
             results[marketplace_id] = [product.to_dict() for product in products]
             meta[marketplace_id] = {"truncated": bool(getattr(parser, "_truncated", False))}
+        except MarketplaceBlockedError:
+            errors[marketplace_id] = "Заблокировано (403)"
         except Exception as exc:  # noqa: BLE001 - a failing marketplace must not break others
             logger.exception("Search failed for marketplace %s", marketplace_id)
             errors[marketplace_id] = str(exc)

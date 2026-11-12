@@ -79,7 +79,7 @@ export default function SearchPage() {
       return;
     }
     search.setFiltersLoading(true);
-    const marketplace = marketplaces.length === 1 ? marketplaces[0] : undefined;
+    const marketplace = marketplaces.length > 0 ? marketplaces[0] : undefined;
     const timer = setTimeout(async () => {
       try {
         const response = await getFilters(trimmed, marketplace);
@@ -206,7 +206,6 @@ export default function SearchPage() {
             <option value={20}>20</option>
             <option value={50}>50</option>
             <option value={100}>100</option>
-            <option value={0}>Все</option>
           </select>
         </div>
 
@@ -228,6 +227,18 @@ export default function SearchPage() {
           {status === "success" && <span className="muted">найдено: {allProducts.length}</span>}
         </div>
 
+        {Object.keys(errors).length > 0 && (
+          <div className="error-banners">
+            {Object.entries(errors).map(([id, message]) => (
+              <div className="error-banner" key={id}>
+                <strong>{id}</strong>: Сайт заблокировал запросы с вашего IP. Пожалуйста,
+                попробуйте позже или используйте VPN.{" "}
+                <span className="muted">({message})</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {status === "loading" && <p className="muted">Запрашиваем маркетплейсы…</p>}
 
         {status === "error" && (
@@ -237,13 +248,7 @@ export default function SearchPage() {
         )}
 
         {status === "success" && allProducts.length === 0 && (
-          <p className="muted">
-            Товары не найдены.
-            {Object.keys(errors).length > 0 &&
-              ` Ошибки: ${Object.entries(errors)
-                .map(([id, message]) => `${id}: ${message}`)
-                .join("; ")}`}
-          </p>
+          <p className="muted">Товары не найдены.</p>
         )}
 
         {status === "success" && allProducts.length > 0 && (
@@ -297,21 +302,12 @@ export default function SearchPage() {
                 {search.itemsPerPage > 0 &&
                   `, показано ${sliceStart + 1}–${sliceEnd}`}
               </p>
-              {truncated && (
-                <p className="muted">
-                  Показаны не все результаты (достигнут лимит парсинга).
-                </p>
-              )}
-            </div>
-
-            {Object.keys(errors).length > 0 && (
-              <p className="status error">
-                Частичные ошибки:{" "}
-                {Object.entries(errors)
-                  .map(([id, message]) => `${id}: ${message}`)
-                  .join("; ")}
+            {truncated && (
+              <p className="muted">
+                Показаны не все результаты (достигнут лимит парсинга).
               </p>
             )}
+          </div>
           </>
         )}
 

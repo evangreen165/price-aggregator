@@ -3,9 +3,10 @@ import base64
 import json
 
 import httpx
+import pytest
 
 from app.parsers import PARSERS, get_parser, list_parsers
-from app.parsers.base import Product
+from app.parsers.base import MarketplaceBlockedError, Product
 from app.parsers.kufar import KufarParser
 from app.parsers.onliner import OnlinerParser
 from app.parsers.ozon import OzonParser
@@ -324,7 +325,7 @@ def test_kufar_search_caps_items() -> None:
 
 
 def test_wb_falls_back_to_browser(monkeypatch) -> None:
-    transport = httpx.MockTransport(lambda _request: httpx.Response(403))
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, text="not json"))
     parser = WbParser(fetcher=httpx.AsyncClient(transport=transport))
 
     async def fake_browser(query, region, products, seen) -> None:
@@ -346,8 +347,15 @@ def test_wb_falls_back_to_browser(monkeypatch) -> None:
     assert "Samsung" in products[0].title
 
 
-def test_ozon_falls_back_to_browser(monkeypatch) -> None:
+def test_wb_raises_blocked_on_403() -> None:
     transport = httpx.MockTransport(lambda _request: httpx.Response(403))
+    parser = WbParser(fetcher=httpx.AsyncClient(transport=transport))
+    with pytest.raises(MarketplaceBlockedError):
+        asyncio.run(parser.search("телевизор", "belarus"))
+
+
+def test_ozon_falls_back_to_browser(monkeypatch) -> None:
+    transport = httpx.MockTransport(lambda _request: httpx.Response(200, text="not json"))
     parser = OzonParser(fetcher=httpx.AsyncClient(transport=transport))
 
     async def fake_browser_data(query: str) -> object:
@@ -357,3 +365,19 @@ def test_ozon_falls_back_to_browser(monkeypatch) -> None:
     products = asyncio.run(parser.search("телевизор", "belarus"))
     assert len(products) == 2
     assert products[0].marketplace == "ozon"
+
+
+def test_ozon_raises_blocked_on_403() -> None:
+    transport = httpx.MockTransport(lambda _request: httpx.Response(403))
+    parser = OzonParser(fetcher=httpx.AsyncClient(transport=transport))
+    with pytest.raises(MarketplaceBlockedError):
+        asyncio.run(parser.search("телевизор", "belarus"))
+
+
+def test_onliner_search_caps_items() -> None:
+    handler = _onliner_handler({1: ONLINER_ITEMS, 2: ONLINER_ITEMS[:1], 3: ONLINER_ITEMS})
+    parser = OnlinerParser(client=httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    parser.max_items = 2
+    products = asyncio.run(parser.search("монитор", "belarus", limit_pages=3))
+    assert len(products) == 2
+    assert parser._truncated is True

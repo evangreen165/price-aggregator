@@ -14,6 +14,15 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+BLOCKED_MESSAGE = (
+    "Сайт заблокировал запросы с вашего IP. "
+    "Пожалуйста, попробуйте позже или используйте VPN."
+)
+
+
+class MarketplaceBlockedError(RuntimeError):
+    """Raised when a marketplace blocks requests from the current IP."""
+
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -25,10 +34,18 @@ DEFAULT_TIMEOUT = httpx.Timeout(20.0)
 
 
 async def launch_chromium(playwright) -> object | None:
-    """Launch Chromium for scraping, preferring the user's installed browser."""
-    for kwargs in ({"channel": "chrome"}, {"channel": "msedge"}, {}):
+    """Launch Chromium for scraping, preferring the user's installed browser.
+
+    Always headless: a visible second browser window destabilises the pywebview
+    accessibility event loop in the frozen app.
+    """
+    for kwargs in (
+        {"channel": "chrome", "headless": True},
+        {"channel": "msedge", "headless": True},
+        {"headless": True},
+    ):
         try:
-            return await playwright.chromium.launch(headless=True, **kwargs)
+            return await playwright.chromium.launch(**kwargs)
         except Exception:  # noqa: BLE001 - try the next browser option
             continue
     return None

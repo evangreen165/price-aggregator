@@ -157,6 +157,52 @@ def test_filters_endpoint_falls_back_to_static_on_error(monkeypatch) -> None:
     assert any(entry["label"] == "Диагональ экрана" for entry in body["filters"])
 
 
+def test_filters_endpoint_onliner_dynamic(monkeypatch) -> None:
+    class FakeOnliner(BaseParser):
+        marketplace_id = "onliner"
+
+        async def search(self, query, region, limit_pages=10, filters=None):
+            return []
+
+        async def fetch_filters(self, query: str) -> list[dict]:
+            return [
+                {
+                    "key": "group_0",
+                    "label": "Производитель",
+                    "options": ["Apple", "Samsung", "Xiaomi"],
+                }
+            ]
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return FakeOnliner() if marketplace_id == "onliner" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/filters", params={"query": "планшет", "marketplace": "onliner"}
+        )
+    body = response.json()
+    assert body["filters"][0]["label"] == "Производитель"
+    assert "Apple" in body["filters"][0]["options"]
+
+
+def test_filters_endpoint_static_for_marketplace_without_filters(monkeypatch) -> None:
+    class PlainWb(BaseParser):
+        marketplace_id = "wb"
+
+        async def search(self, query, region, limit_pages=10, filters=None):
+            return []
+
+    def fake_get_parser(marketplace_id: str) -> BaseParser | None:
+        return PlainWb() if marketplace_id == "wb" else None
+
+    monkeypatch.setattr("app.main.get_parser", fake_get_parser)
+    with TestClient(app) as client:
+        response = client.get("/api/filters", params={"query": "планшет", "marketplace": "wb"})
+    body = response.json()
+    assert any(entry["label"] == "Диагональ экрана" for entry in body["filters"])
+
+
 def test_proxy_rejects_invalid_urls() -> None:
     with TestClient(app) as client:
         response = client.get("/proxy", params={"url": "javascript:alert(1)"})

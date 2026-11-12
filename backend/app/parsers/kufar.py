@@ -13,7 +13,7 @@ from app.parsers.base import BaseParser, Product
 SEARCH_URL = "https://www.kufar.by/l"
 RENDERED_API_URL = "https://api.kufar.by/search-api/v2/search/rendered"
 PAGE_SIZE = 50
-MAX_ITEMS = 2000
+MAX_ITEMS = 5000
 MAX_FILTERS = 15
 
 

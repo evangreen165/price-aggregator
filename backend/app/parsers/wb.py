@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from urllib.parse import quote
 
-from app.parsers.base import BaseParser, Product, launch_chromium
+from app.parsers.base import (
+    BLOCKED_MESSAGE,
+    BaseParser,
+    MarketplaceBlockedError,
+    Product,
+    launch_chromium,
+)
 
 WARM_URL = "https://www.wildberries.ru/"
 SEARCH_URL = "https://search.wb.ru/exactmatch/ru/common/v4/search"
@@ -40,6 +46,8 @@ class WbParser(BaseParser):
             response = await session.get(url, params=params, headers=HEADERS, timeout=20)
         except Exception:  # noqa: BLE001
             return None
+        if response.status_code in (403, 498, 429):
+            raise MarketplaceBlockedError(BLOCKED_MESSAGE)
         if response.status_code != 200:
             return None
         try:
@@ -139,8 +147,13 @@ class WbParser(BaseParser):
                     await page.wait_for_load_state("networkidle", timeout=15000)
                 except Exception:  # noqa: BLE001
                     pass
+                body_text = await page.evaluate("() => document.body.innerText.slice(0, 500)")
+                if "доступ ограничен" in body_text.lower():
+                    raise MarketplaceBlockedError(BLOCKED_MESSAGE)
                 await browser.close()
                 return captured[0] if captured else None
+        except MarketplaceBlockedError:
+            raise
         except Exception:  # noqa: BLE001
             return None
 
