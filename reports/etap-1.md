@@ -107,10 +107,20 @@ dist/assets/index-*.js        212.17 kB
 - [x] `http://localhost:5173` отдаёт React-приложение; `/api/plugins` содержит `example`.
 - [x] `python scripts/build.py` создаёт `dist/PriceAggregator.exe`; окно без консоли, health и
       список плагинов работают.
-- [ ] Коммит и тег созданы; `main` и `v0.1-etap-1` запушены в `origin` — выполняется на шаге git.
-- [ ] CI зелёный — проверяется после push (репозиторий публичный:
-      <https://github.com/evangreen165/price-aggregator/actions>).
+- [x] Коммит `c565af4` и тег `v0.1-etap-1` созданы; `main` и тег запушены в `origin`.
+- [x] CI зелёный — run [#43219105670](https://github.com/evangreen165/price-aggregator/actions/runs/43219105670)
+      завершился со статусом `success` (jobs `backend` и `frontend`).
 - [x] `reports/etap-1.md` присутствует в репозитории.
+
+## CI
+
+Workflow `.github/workflows/ci.yml` отработал на push коммита `c565af4`:
+
+- run id `43219105670`, `conclusion: success`, длительность ~21 с;
+- job `backend`: `pip install -e ".[dev]"` → `ruff check .` → `pytest -q`;
+- job `frontend`: `npm ci` → `npm run typecheck` → `npm run build`.
+
+Страница: <https://github.com/evangreen165/price-aggregator/actions>
 
 ## Замечания
 
